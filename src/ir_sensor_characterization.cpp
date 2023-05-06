@@ -8,6 +8,7 @@ const long SAMPLE_DURATION = 1000000; // 1 s
 const int BUFFER_SIZE = (SAMPLE_DURATION / STREAM_PERIOD);
 
 // Namespace Variables - Mutable
+//poopy :)
 long currentTimeMicros = 0;
 long lastStreamTime = 0;
 
