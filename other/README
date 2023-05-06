@@ -1,0 +1,5 @@
+This folder is used for entry point files ("main files") that are being unused.
+
+This is because the PlatformIO Arduino compiler can only handle a single "main" file 
+in src at a time. 
+
