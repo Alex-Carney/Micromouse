@@ -1,5 +1,6 @@
 #include "Arduino.h"
 #include "PositionSensor.h"
+#include <memory>
 
 const int N_COEFFICIENTS = 2;
 
@@ -13,13 +14,15 @@ PositionSensor::PositionSensor(int pin, float *coefficients)
     }
 }
 
+PositionSensor::~PositionSensor()
+{
+    delete[] _coefficients;
+}
+
 float PositionSensor::readDistanceCM()
 {
     int analogValue = analogRead(_pin);
-
-    // TODO: Implement the conversion from analog value to distance in cm
     float distance = _coefficients[0] * pow(analogValue, _coefficients[1]);
-
     return distance;
 }
 
