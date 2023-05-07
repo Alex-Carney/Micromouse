@@ -1,11 +1,15 @@
 #include "Arduino.h"
+// Stupid arduino glitch https://stackoverflow.com/questions/41093090/esp8266-error-macro-min-passed-3-arguments-but-takes-just-2
+#undef max
+#undef min
 #include "PositionSensor.h"
 #include <memory>
 
-const int N_COEFFICIENTS = 2;
+
 
 PositionSensor::PositionSensor(int pin, float *coefficients)
 {
+    const int N_COEFFICIENTS = 2;
     _pin = pin;
     _coefficients = new float[N_COEFFICIENTS];
     for (int i = 0; i < N_COEFFICIENTS; i++)

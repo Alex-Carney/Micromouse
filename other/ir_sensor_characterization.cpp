@@ -1,6 +1,6 @@
 #include <Arduino.h>
 
-const int IR_SENSOR_PIN = A0;
+const int IR_SENSOR_PIN = A10;
 bool IS_RUNNING = true;
 
 const int STREAM_PERIOD = 100000;     // 100 ms
@@ -21,6 +21,7 @@ void setup()
 {
     // Peripheral initialization
     Serial.begin(9600);
+    //Serial.print(analogRead(IR_SENSOR_PIN));
 }
 
 void loop()

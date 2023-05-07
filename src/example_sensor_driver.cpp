@@ -1,7 +1,8 @@
 #include "PositionSensor.h"
+#include <Arduino.h>
 
-const int sensor1Pin = A0;
-const int sensor2Pin = A1;
+const int sensor1Pin = A11;
+const int sensor2Pin = A10;
 
 // Characterized in MATLAB
 // SENSOR 1 is the sensor with serial number 2003
@@ -20,10 +21,16 @@ void setup()
 
 void loop()
 {
-    float distanceCM = sensor1.readDistanceCM();
+    float distanceRAW = sensor2.readDistanceRaw();
+    float distanceCM = sensor2.readDistanceCM();
 
     Serial.print("Distance in cm: ");
     Serial.print(distanceCM);
+    Serial.println();
+
+    Serial.print("Distance Raw: ");
+    Serial.print(distanceRAW);
+    Serial.println();
 
     delay(1000);
 }
