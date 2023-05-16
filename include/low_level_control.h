@@ -27,8 +27,8 @@ namespace ll_control
         long oldTime,
         long encoder3Val_start_m1,
         long encoder3Val_start_m2,
-        CircularBuffer<double> control_buffer_m1,
-        CircularBuffer<double> control_buffer_m2,
+        CircularBuffer<double>& control_buffer_m1,
+        CircularBuffer<double>& control_buffer_m2,
         ArduinoMotorShieldR3 md);
 }
 

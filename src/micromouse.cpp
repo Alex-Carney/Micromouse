@@ -103,6 +103,7 @@ void loop()
     case MachineState::DRIVING:
         if (isFirstStateIteration)
         {
+            //Serial.println("Got into driving state");
             // Initialize T and X
             oldTime = micros();
             drive_control::start_time = oldTime;
@@ -121,6 +122,7 @@ void loop()
 
         if (((newTime - lastSampleTime)) >= drive_control::SAMPLING_PERIOD)
         {
+            //Serial.println("Time to sample");
             // Collect data
             drive_control::motor1_pos = encoder::getEncoderValue(ENCODER_M1);
             drive_control::motor2_pos = encoder::getEncoderValue(ENCODER_M2);

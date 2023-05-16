@@ -4,11 +4,19 @@
 #include "curve_fitting.h"
 #include <Arduino.h>
 
+// Set DEBUG_MODE to 1 to enable debugging
+#define DEBUG_MODE 0
+
 // Define a macro for PI
 #define M_PI 3.14159265358979323846
 
 namespace ll_control
 {
+    // DEBUGGING
+    const int size = 20;
+    int i = 2;
+    double nums2_m1[size][3] = {0};
+
     // Compensator Constants
     const double a = 2;      // coefficient for u[k-1]
     const double b = -1;     // coefficient for u[k-2]
@@ -25,8 +33,8 @@ namespace ll_control
         long oldTime,
         long encoder3Val_start_m1,
         long encoder3Val_start_m2,
-        CircularBuffer<double> control_buffer_m1,
-        CircularBuffer<double> control_buffer_m2,
+        CircularBuffer<double>& control_buffer_m1,
+        CircularBuffer<double>& control_buffer_m2,
         ArduinoMotorShieldR3 md)
     {
 
@@ -41,7 +49,10 @@ namespace ll_control
         // nums2_m1[i][1] = (ref_left - nums2_m1[i][0]);                                                                               // error signal in rad/s
 
         // nums2_m1[i][2] = (a * nums2_m1[i - 1][2] + b * nums2_m1[i - 2][2] + c * nums2_m1[i][1] + d * nums2_m1[i - 1][1] + e * nums2_m1[i - 2][1]); // control effort
+        nums2_m1[i][0] = (60000000.0 * ((encoder3Val_start_m1 - motor1_pos)) / ((double)(newTime - oldTime) * 1260.0)) * M_PI / 30; // velocity in rad/s
+        nums2_m1[i][1] = (ref_left - nums2_m1[i][0]);                                                                             // error signal in rad/s
 
+        nums2_m1[i][2] = (a * nums2_m1[i - 1][2] + b * nums2_m1[i - 2][2] + c * nums2_m1[i][1] + d * nums2_m1[i - 1][1] + e * nums2_m1[i - 2][1]); // control effort
         // nums_m2[i] = newTime;
 
         double motor2_values[3] = {
@@ -61,12 +72,43 @@ namespace ll_control
         control_buffer_m1.addValues(motor1_values);
         control_buffer_m2.addValues(motor2_values);
 
+
+
+        // Serial.println("Printing second circular buffer");
+        // control_buffer_m2.print();
+        // Serial.println("Done Printing circular buffers");
+        // only print if debug
+
+        #ifdef DEBUG_MODE
+        Serial.println("Printing circular buffers");
+        control_buffer_m1.print();
+        Serial.println("Values from Buffer");
+        Serial.print(motor1_values[0]);
+        Serial.print(" ");
+        Serial.print(motor1_values[1]);
+        Serial.print(" ");
+        Serial.print(motor1_values[2]);
+        Serial.println();
+        Serial.println("Values from Nums2_m1");
+        Serial.print(nums2_m1[i][0]);
+        Serial.print(" ");
+        Serial.print(nums2_m1[i][1]);
+        Serial.print(" ");
+        Serial.print(nums2_m1[i][2]);
+        Serial.println();
+        #endif
         // double send_m1 = speedPwmCommandFromVoltage(nums2_m1[i][2]);
-        double send_m1 = speedPwmCommandFromVoltage(motor2_values[1]);
+        double send_m1 = speedPwmCommandFromVoltage(motor1_values[2]);
         double send_m2 = speedPwmCommandFromVoltage(motor2_values[2]);
+
+        // Serial.print("Sent PWM command to motors: ");
+        // Serial.println(send_m1);
+        // Serial.println(send_m2);
 
         md.setM1Speed((int)send_m1);
         md.setM2Speed((int)send_m2);
+
+        i++;
 
         return;
     }
