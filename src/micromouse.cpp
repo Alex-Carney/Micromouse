@@ -3,6 +3,7 @@
 #include "ArduinoMotorEncoder.h"
 #include "CircularBuffer.h"
 #include "low_level_control.h"
+#include "PositionSensor.h"
 #include <Arduino.h>
 
 /****************************************************/
@@ -16,6 +17,7 @@ Authors: Alex Carney, Majd Hamdan, Youssef Marzouk, Nick Hagler
 // Macros
 // Set DEBUG_MODE to 1 to enable debugging
 #define DEBUG_MODE 1
+#define WALL_FOLLOW 1
 
 // Object definition prototypes
 ArduinoMotorShieldR3 md;
@@ -40,12 +42,19 @@ namespace drive_control
     long motor1_pos;
     long motor2_pos;
     long start_time;
+    double motor1_reference_speed;
+    double motor2_reference_speed;
     long encoder3Val_start_m2;
     long encoder3Val_start_m1;
     long time_buffer_m1[100];
     // 0: velocity, 1: error, 2: control effort
     CircularBuffer<double> control_buffer_m1(2, 3); // 2 steps back. 3 values per step
     CircularBuffer<double> control_buffer_m2(2, 3); // 2 steps back. 3 values per step
+    float sensor1_coefficients[] = {2.2e4, -1.227};
+    PositionSensor sensor_mini_right((int)A10, sensor1_coefficients);
+    float sensor2_coefficients[] = {1.18e4, -1.138};
+    PositionSensor sensor_marks((int)A11, sensor2_coefficients);
+    const double DEL_X_GAIN = 0.1;
 }
 // State machine definitions
 enum class MachineState
@@ -78,6 +87,7 @@ void setup()
 
 // Peripheral Initialization
 #ifdef DEBUG_MODE
+#if DEBUG_MODE == 1
     Serial.begin(115200);               // Initialize the Serial Port to view information on the Serial Monitor
     Serial.println("%Streaming in..."); // Countdown
     Serial.print("%3...");
@@ -86,6 +96,7 @@ void setup()
     delay(1000); // Wait for a second
     Serial.println("%1...");
     delay(1000); // Wait for a second
+#endif
 #endif
 }
 
@@ -129,10 +140,46 @@ void loop()
 
             lastSampleTime = newTime;
 
+            // Measure distances to both walls, in CM 
+            float dist_left_cm = drive_control::sensor_mini_right.readDistanceCM();
+            float dist_right_cm = drive_control::sensor_marks.readDistanceCM();
+            float dist_diff = dist_left_cm - dist_right_cm;
+            // Calculate Del W_ref from Del X
+            double delWRef = drive_control::DEL_X_GAIN * dist_diff;
+
+            #ifdef DEBUG_MODE
+            #if DEBUG_MODE == 1
+            Serial.print("DISTANCE RIGHT: ");
+            Serial.println(dist_right_cm);
+            Serial.print("DISTANCE LEFT: ");
+            Serial.println(dist_left_cm);
+            Serial.print("DISTANCE DIFFERENTIAL: ");
+            Serial.println(dist_diff);
+            Serial.print("DEL W REF: ");
+            Serial.println(delWRef);
+            #endif
+            #endif
+
+            // Calculate new reference speeds - only if wall following on 
+            #ifdef WALL_FOLLOW
+            #if WALL_FOLLOW == 1
+            drive_control::motor1_reference_speed = min(drive_control::MAX_SPEED_RADS + delWRef, 4.0);
+            drive_control::motor2_reference_speed = min(drive_control::MAX_SPEED_RADS - delWRef, 4.0);
+            #else
+            drive_control::motor1_reference_speed = drive_control::MAX_SPEED_RADS;
+            drive_control::motor2_reference_speed = drive_control::MAX_SPEED_RADS;
+            #endif
+            #endif
+
+
+
+
+
+
             // Compensate wheel speed
             ll_control::updateWheelSpeed(
-                drive_control::MAX_SPEED_RADS,
-                drive_control::MAX_SPEED_RADS,
+                drive_control::motor1_reference_speed,
+                drive_control::motor2_reference_speed,
                 drive_control::motor1_pos,
                 drive_control::motor2_pos,
                 newTime,

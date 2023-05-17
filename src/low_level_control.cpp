@@ -41,8 +41,6 @@ namespace ll_control
         CircularBuffer<double>& control_buffer_m2,
         ArduinoMotorShieldR3& md)
     {
-
-
         // nums_m1[i] = newTime;
         // VELOCITY // ERROR // CONTROL EFFORT
         double motor1_values[3] = {
@@ -66,6 +64,7 @@ namespace ll_control
         // only print if debug
 
         #ifdef DEBUG_MODE
+        #if DEBUG_MODE == 1
         Serial.println("Printing circular buffers");
         control_buffer_m1.print();
         Serial.println("Values from Buffer");
@@ -75,6 +74,7 @@ namespace ll_control
         Serial.print(" ");
         Serial.print(motor1_values[2]);
         Serial.println();
+        #endif
         #endif
         // double send_m1 = speedPwmCommandFromVoltage(nums2_m1[i][2]);
         //TODO: Fix this later 
@@ -86,8 +86,6 @@ namespace ll_control
 
         md.setM1Speed((int)toTest);
         md.setM2Speed((int)toTest2);
-
-        i++;
 
         return;
     }
