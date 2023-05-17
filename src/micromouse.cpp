@@ -122,10 +122,11 @@ void loop()
 
         if (((newTime - lastSampleTime)) >= drive_control::SAMPLING_PERIOD)
         {
-            //Serial.println("Time to sample");
-            // Collect data
             drive_control::motor1_pos = encoder::getEncoderValue(ENCODER_M1);
             drive_control::motor2_pos = encoder::getEncoderValue(ENCODER_M2);
+            //Serial.println("Time to sample");
+            // Collect data
+
             lastSampleTime = newTime;
 
             // Compensate wheel speed

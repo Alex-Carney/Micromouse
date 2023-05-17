@@ -10,12 +10,14 @@
 // Define a macro for PI
 #define M_PI 3.14159265358979323846
 
+// do function prototype ffor get U
+double getU(double V);
 namespace ll_control
 {
     // DEBUGGING
     const int size = 20;
     int i = 2;
-    double nums2_m1[size][3] = {0};
+    double nums2_m2[size][3] = {0};
 
     // Compensator Constants
     const double a = 2;      // coefficient for u[k-1]
@@ -23,6 +25,8 @@ namespace ll_control
     const double c = 2.131;  // coefficient for e[k]
     const double d = -2.908; // coefficient for e[k-1]
     const double e = 0.9612; // coefficient for e[k-2]
+
+
 
     void updateWheelSpeed(
         double ref_right,
@@ -35,8 +39,9 @@ namespace ll_control
         long encoder3Val_start_m2,
         CircularBuffer<double>& control_buffer_m1,
         CircularBuffer<double>& control_buffer_m2,
-        ArduinoMotorShieldR3 md)
+        ArduinoMotorShieldR3& md)
     {
+
 
         // nums_m1[i] = newTime;
         // VELOCITY // ERROR // CONTROL EFFORT
@@ -45,29 +50,10 @@ namespace ll_control
             (ref_left - motor1_values[0]),
             (a * control_buffer_m1.getValue(1, 2) + b * control_buffer_m1.getValue(2, 2) + c * motor1_values[1] + d * control_buffer_m1.getValue(1, 1) + e * control_buffer_m1.getValue(2, 1))};
 
-        // nums2_m1[i][0] = (60000000.0 * ((encoder3Val_start_m1 - motor1_pos)) / ((double)(newTime - oldTime) * 1260.0)) * M_PI / 30; // velocity in rad/s
-        // nums2_m1[i][1] = (ref_left - nums2_m1[i][0]);                                                                               // error signal in rad/s
-
-        // nums2_m1[i][2] = (a * nums2_m1[i - 1][2] + b * nums2_m1[i - 2][2] + c * nums2_m1[i][1] + d * nums2_m1[i - 1][1] + e * nums2_m1[i - 2][1]); // control effort
-        nums2_m1[i][0] = (60000000.0 * ((encoder3Val_start_m1 - motor1_pos)) / ((double)(newTime - oldTime) * 1260.0)) * M_PI / 30; // velocity in rad/s
-        nums2_m1[i][1] = (ref_left - nums2_m1[i][0]);                                                                             // error signal in rad/s
-
-        nums2_m1[i][2] = (a * nums2_m1[i - 1][2] + b * nums2_m1[i - 2][2] + c * nums2_m1[i][1] + d * nums2_m1[i - 1][1] + e * nums2_m1[i - 2][1]); // control effort
-        // nums_m2[i] = newTime;
-
         double motor2_values[3] = {
             (60000000.0 * ((encoder3Val_start_m2 - motor2_pos)) / ((double)(newTime - oldTime) * 1260.0)) * M_PI / 30,
             ((-ref_right) - motor2_values[0]),
             (a * control_buffer_m2.getValue(1, 2) + b * control_buffer_m2.getValue(2, 2) + c * motor2_values[1] + d * control_buffer_m2.getValue(1, 1) + e * control_buffer_m2.getValue(2, 1))};
-
-        // nums2_m2[i][0] = (60000000.0 * ((encoder3Val_start_m2 - motor2_pos)) / ((double)(newTime - oldTime) * 1260.0)) * M_PI / 30; // velocity in rad/s
-        // nums2_m2[i][1] = ((-ref_right) - nums2_m2[i][0]);                                                                           // error signal in rad/s
-
-        // nums2_m2[i][2] = (a * nums2_m2[i - 1][2] + b * nums2_m2[i - 2][2] + c * nums2_m2[i][1] + d * nums2_m2[i - 1][1] + e * nums2_m2[i - 2][1]); // control effort
-
-        // delay(1);
-        // encoder3Val_start_m1 = pos_m1;
-        // encoder3Val_start_m2 = pos_m2;
 
         control_buffer_m1.addValues(motor1_values);
         control_buffer_m2.addValues(motor2_values);
@@ -89,27 +75,72 @@ namespace ll_control
         Serial.print(" ");
         Serial.print(motor1_values[2]);
         Serial.println();
-        Serial.println("Values from Nums2_m1");
-        Serial.print(nums2_m1[i][0]);
-        Serial.print(" ");
-        Serial.print(nums2_m1[i][1]);
-        Serial.print(" ");
-        Serial.print(nums2_m1[i][2]);
-        Serial.println();
         #endif
         // double send_m1 = speedPwmCommandFromVoltage(nums2_m1[i][2]);
-        double send_m1 = speedPwmCommandFromVoltage(motor1_values[2]);
-        double send_m2 = speedPwmCommandFromVoltage(motor2_values[2]);
+        //TODO: Fix this later 
+        // double send_m1 = speedPwmCommandFromVoltage(motor1_values[2]);
+        // double send_m2 = speedPwmCommandFromVoltage(motor2_values[2]);
 
-        // Serial.print("Sent PWM command to motors: ");
-        // Serial.println(send_m1);
-        // Serial.println(send_m2);
+        double toTest = getU(motor1_values[2]);
+        double toTest2 = getU(motor2_values[2]);
 
-        md.setM1Speed((int)send_m1);
-        md.setM2Speed((int)send_m2);
+        md.setM1Speed((int)toTest);
+        md.setM2Speed((int)toTest2);
 
         i++;
 
         return;
     }
+}
+
+//*****************************************************
+double getU(double V)
+//*****************************************************
+{
+  int result;
+  // double V = scaled;
+
+  if (V < -8.18)
+  {
+    result = (67.869 * V) + 249.736;
+
+    if (result <= -400)
+    {
+      result = -400;
+    }
+  }
+  else if ((V >= -8.18) && (V < -5.75))
+  {
+    result = (42.7 * V) + 72.06;
+  }
+  else if ((V >= -5.75) && (V < -0))
+  {
+
+    result = (-0.301 * V * V) + 16.898 * V - 60.4455;
+  }
+
+  else if ((V >= 0.0) && (V < 5.5))
+  {
+
+    result = (15.1688 * V) + 65.818;
+  }
+
+  else if ((V >= 5.5) && (V < 7.75))
+  {
+
+    result = 37.1683 * V - 40.9424;
+  }
+
+  else if ((V >= 7.75))
+  {
+
+    result = 61.0135 * V - 206.4433;
+
+    if (result >= 400)
+    {
+      result = 400;
+    }
+  }
+
+  return result;
 }

@@ -29,7 +29,7 @@ namespace ll_control
         long encoder3Val_start_m2,
         CircularBuffer<double>& control_buffer_m1,
         CircularBuffer<double>& control_buffer_m2,
-        ArduinoMotorShieldR3 md);
+        ArduinoMotorShieldR3& md);
 }
 
 #endif // LOW_LEVEL_CONTROL_H

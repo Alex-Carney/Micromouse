@@ -1,9 +1,9 @@
-#include "NAxisMotion.h" //Contains the bridge code between the API and the Arduino Environment
+//#include "NAxisMotion.h" //Contains the bridge code between the API and the Arduino Environment
 #include <Wire.h>
 #include <SPI.h>
 #include "ArduinoMotorShieldR3.h"
 
-NAxisMotion mySensor;           // Object that for the sensor
+//NAxisMotion mySensor;           // Object that for the sensor
 ArduinoMotorShieldR3 md;        // Object for the motor
 long lastStreamTime = 0;        // To store the last streamed time stamp
 const int streamPeriod = 40000; // To stream at 25Hz without using additional timers (time period(us) =1000000/frequency(Hz))
@@ -49,13 +49,13 @@ void setup()
 {
   // Peripheral Initialization
   Serial.begin(115200); // Initialize the Serial Port to view information on the Serial Monitor
-  I2C.begin();          // Initialize I2C communication to the let the library communicate with the sensor.
+  // I2C.begin();          // Initialize I2C communication to the let the library communicate with the sensor.
   // Motor Init
   md.init();
   // Sensor Initialization
-  mySensor.initSensor(0x28);                      // The I2C Address can be changed here inside this function in the library
-  mySensor.setOperationMode(OPERATION_MODE_NDOF); // Can be configured to other operation modes as desired
-  mySensor.setUpdateMode(MANUAL);                 // The default is AUTO. Changing to manual requires calling the relevant update functions prior to calling the read functions
+  // mySensor.initSensor(0x28);                      // The I2C Address can be changed here inside this function in the library
+  // mySensor.setOperationMode(OPERATION_MODE_NDOF); // Can be configured to other operation modes as desired
+  // mySensor.setUpdateMode(MANUAL);                 // The default is AUTO. Changing to manual requires calling the relevant update functions prior to calling the read functions
 
   // Encoder init
   pinMode(chipSelectPin1, OUTPUT);
@@ -68,16 +68,16 @@ void setup()
   LS7366_Init();
 
   // Setting to MANUAL requires lesser reads to the sensor
-  mySensor.updateAccelConfig();
+  // mySensor.updateAccelConfig();
   updateSensorData = true;
   Serial.println();
   Serial.println("Default accelerometer configuration settings...");
   Serial.print("Range: ");
-  Serial.println(mySensor.readAccelRange());
-  Serial.print("Bandwidth: ");
-  Serial.println(mySensor.readAccelBandwidth());
-  Serial.print("Power Mode: ");
-  Serial.println(mySensor.readAccelPowerMode());
+  // Serial.println(mySensor.readAccelRange());
+  // Serial.print("Bandwidth: ");
+  // Serial.println(mySensor.readAccelBandwidth());
+  // Serial.print("Power Mode: ");
+  // Serial.println(mySensor.readAccelPowerMode());
   Serial.println("Streaming in ..."); // Countdown
   Serial.print("3...");
   delay(1000); // Wait for a second
