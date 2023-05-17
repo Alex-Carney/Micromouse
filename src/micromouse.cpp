@@ -4,6 +4,7 @@
 #include "CircularBuffer.h"
 #include "low_level_control.h"
 #include "PositionSensor.h"
+#include "MotorCommand.h"
 #include <Arduino.h>
 
 /****************************************************/
@@ -194,14 +195,8 @@ void loop()
             #endif
             #endif
 
-
-
-
-
-
-
             // Compensate wheel speed
-            ll_control::updateWheelSpeed(
+            MotorCommand command = ll_control::compensateDriveSpeed(
                 drive_control::motor1_reference_speed,
                 drive_control::motor2_reference_speed,
                 drive_control::motor1_pos,
@@ -211,8 +206,11 @@ void loop()
                 drive_control::encoder3Val_start_m1,
                 drive_control::encoder3Val_start_m2,
                 drive_control::control_buffer_m1,
-                drive_control::control_buffer_m2,
-                md);
+                drive_control::control_buffer_m2);
+
+            // Apply control to motors
+            md.setM1Speed((int)command.motor1_pwm);
+            md.setM2Speed((int)command.motor2_pwm);
 
             // Update data
             oldTime = newTime;

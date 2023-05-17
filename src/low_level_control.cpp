@@ -2,6 +2,7 @@
 #include "ArduinoMotorShieldR3.h"
 #include "CircularBuffer.h"
 #include "curve_fitting.h"
+#include "MotorCommand.h"
 #include <Arduino.h>
 
 // Set DEBUG_MODE to 1 to enable debugging
@@ -19,16 +20,45 @@ namespace ll_control
     int i = 2;
     double nums2_m2[size][3] = {0};
 
-    // Compensator Constants
-    const double a = 2;      // coefficient for u[k-1]
-    const double b = -1;     // coefficient for u[k-2]
-    const double c = 2.131;  // coefficient for e[k]
-    const double d = -2.908; // coefficient for e[k-1]
-    const double e = 0.9612; // coefficient for e[k-2]
+    // Compensator Constants for Driving
+    namespace speed_compensation {
+      const double a = 2;      // coefficient for u[k-1]
+      const double b = -1;     // coefficient for u[k-2]
+      const double c = 2.131;  // coefficient for e[k]
+      const double d = -2.908; // coefficient for e[k-1]
+      const double e = 0.9612; // coefficient for e[k-2]
+    }
+
+    // Compensator Constants for Turning
+
+    // Compensator Constants Position Control
+    namespace position_compensation {
+      const double a = 1.429;  // coefficient for u[k-1]
+      const double b = .6202; // coefficient for e[k]
+      const double c = .03096; // coefficient for e[k-1]
+      const double d = -.5892; // coefficient for e[k-2]
+      const double e = -.4286; // coefficient for u[k-2]
+    }
+
+    MotorCommand compensateMousePosition(
+      double pos_ref,
+      long motor1_pos,
+      long motor2_pos,
+      long newTime,
+      long oldTime,
+      long encoder3Val_start_m1,
+      long encoder3Val_start_m2,
+      CircularBuffer<double>& control_buffer_m1,
+      CircularBuffer<double>& control_buffer_m2)
+    {
+
+    }
+    
 
 
 
-    void updateWheelSpeed(
+
+    MotorCommand compensateDriveSpeed(
         double ref_right,
         double ref_left,
         long motor1_pos,
@@ -38,20 +68,19 @@ namespace ll_control
         long encoder3Val_start_m1,
         long encoder3Val_start_m2,
         CircularBuffer<double>& control_buffer_m1,
-        CircularBuffer<double>& control_buffer_m2,
-        ArduinoMotorShieldR3& md)
+        CircularBuffer<double>& control_buffer_m2)
     {
         // nums_m1[i] = newTime;
         // VELOCITY // ERROR // CONTROL EFFORT
         double motor1_values[3] = {
             (60000000.0 * ((encoder3Val_start_m1 - motor1_pos)) / ((double)(newTime - oldTime) * 1260.0)) * M_PI / 30,
             (ref_left - motor1_values[0]),
-            (a * control_buffer_m1.getValue(1, 2) + b * control_buffer_m1.getValue(2, 2) + c * motor1_values[1] + d * control_buffer_m1.getValue(1, 1) + e * control_buffer_m1.getValue(2, 1))};
+            (speed_compensation::a * control_buffer_m1.getValue(1, 2) + speed_compensation::b * control_buffer_m1.getValue(2, 2) + speed_compensation::c * motor1_values[1] + speed_compensation::d * control_buffer_m1.getValue(1, 1) + speed_compensation::e * control_buffer_m1.getValue(2, 1))};
 
         double motor2_values[3] = {
             (60000000.0 * ((encoder3Val_start_m2 - motor2_pos)) / ((double)(newTime - oldTime) * 1260.0)) * M_PI / 30,
             ((-ref_right) - motor2_values[0]),
-            (a * control_buffer_m2.getValue(1, 2) + b * control_buffer_m2.getValue(2, 2) + c * motor2_values[1] + d * control_buffer_m2.getValue(1, 1) + e * control_buffer_m2.getValue(2, 1))};
+            (speed_compensation::a * control_buffer_m2.getValue(1, 2) + speed_compensation::b * control_buffer_m2.getValue(2, 2) + speed_compensation::c * motor2_values[1] + speed_compensation::d * control_buffer_m2.getValue(1, 1) + speed_compensation::e * control_buffer_m2.getValue(2, 1))};
 
         control_buffer_m1.addValues(motor1_values);
         control_buffer_m2.addValues(motor2_values);
@@ -81,13 +110,11 @@ namespace ll_control
         // double send_m1 = speedPwmCommandFromVoltage(motor1_values[2]);
         // double send_m2 = speedPwmCommandFromVoltage(motor2_values[2]);
 
-        double toTest = getU(motor1_values[2]);
-        double toTest2 = getU(motor2_values[2]);
+        MotorCommand command;
+        command.motor1_pwm = getU(motor1_values[2]);
+        command.motor2_pwm = getU(motor2_values[2]);
 
-        md.setM1Speed((int)toTest);
-        md.setM2Speed((int)toTest2);
-
-        return;
+        return command;
     }
 }
 
