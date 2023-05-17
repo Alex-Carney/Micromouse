@@ -240,11 +240,9 @@ void loop()
             }
 
             if(intersection_found){
-                // Stop motors
-                md.setM1Speed(0);
-                md.setM2Speed(0);
+
                 // Update state
-                MACHINE_STATE = MachineState::PROCESS_STOPPED;
+                MACHINE_STATE = MachineState::DECELERATING;
             }
 
         }
