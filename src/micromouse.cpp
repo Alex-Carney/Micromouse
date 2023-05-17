@@ -32,12 +32,30 @@ const int ENCODER_M2 = 2;
 long newTime = 0;
 long oldTime = 0;
 long lastSampleTime = 0;
+
+namespace traversal
+{
+    // Constants
+    const int PATH_DISTANCE_THRESHOLD = 10; // (cm) Distance threshold for path detection
+    const int INTERSECTION_WALK_DISTANCE = 10; // (cm) Distance to walk once intersection is found
+
+    // Globals
+    // For Path managing and maze traversal
+    int path_right = -1;
+    int path_left = -1;
+    int path_forward = -1;
+    float pre_distance_left = 0;
+    float pre_distance_right = 0;
+
+}
+
 // Global variables for DRIVING
 namespace drive_control
 {
     // Constants
     const int SAMPLING_PERIOD = 40000; // Sampling period in microseconds
     const double MAX_SPEED_RADS = 3;   // Maximum speed in radians per second
+   
 
     // Globals
     long motor1_pos;
@@ -127,6 +145,10 @@ void loop()
             md.setM1Speed(0);
             md.setM2Speed(0);
 
+            // State transition logic: Record distances right, left forward.
+            traversal::pre_distance_right = drive_control::sensor_mini_right.readDistanceCM();
+            traversal::pre_distance_left = drive_control::sensor_marks.readDistanceCM();
+
             isFirstStateIteration = false;
         }
 
@@ -145,6 +167,7 @@ void loop()
             float dist_left_cm = drive_control::sensor_mini_right.readDistanceCM();
             float dist_right_cm = drive_control::sensor_marks.readDistanceCM();
             float dist_diff = dist_left_cm - dist_right_cm;
+
             // Calculate Del W_ref from Del X
             double delWRef = drive_control::DEL_X_GAIN * dist_diff;
 
@@ -193,6 +216,35 @@ void loop()
             oldTime = newTime;
             drive_control::encoder3Val_start_m1 = drive_control::motor1_pos;
             drive_control::encoder3Val_start_m2 = drive_control::motor2_pos;
+
+
+            // State transition logic: Record distances right, left forward.
+            int intersection_found = 0;
+            if (dist_left_cm - traversal::pre_distance_left >  traversal::PATH_DISTANCE_THRESHOLD)
+            {
+                // double check its not a glitch reading
+                if (drive_control::sensor_marks.readDistanceCM() - traversal::pre_distance_left >  traversal::PATH_DISTANCE_THRESHOLD){
+                    intersection_found = 1;
+                    traversal::path_left = 1;
+                    traversal::pre_distance_left = dist_left_cm;
+                }  
+                drive_control::sensor_mini_right.readDistanceCM();
+            }
+            if (dist_right_cm - traversal::pre_distance_right > traversal::PATH_DISTANCE_THRESHOLD){
+                // double check its not a glitch reading
+                if ( drive_control::sensor_mini_right.readDistanceCM() - traversal::pre_distance_right > traversal::PATH_DISTANCE_THRESHOLD){
+                    intersection_found = 1;
+                    traversal::path_right = 1;
+                    traversal::pre_distance_right = dist_right_cm;
+                }
+            }
+
+            if(intersection_found){
+
+                // Update state
+                MACHINE_STATE = MachineState::DECELERATING;
+            }
+
         }
 
         break;
@@ -206,7 +258,20 @@ void loop()
         // Initialization
         break;
     case MachineState::PROCESS_STOPPED:
-        // Initialization
+
+        // TODO: Talk to maze traversal and reset path variables
+
+        // Stop motors
+        md.setM1Speed(0);
+        md.setM2Speed(0);
+
+        // walk forward traversal::INTERSECTION_WALK_DISTANCE
+        // TODO: Use Nick Code here
+
+
+        // Update state
+        MACHINE_STATE = MachineState::TURNING;
+
         break;
     default:
         break;
