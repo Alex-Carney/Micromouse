@@ -11,8 +11,10 @@
 // Define a macro for PI
 #define M_PI 3.14159265358979323846
 
-// do function prototype ffor get U
+// internal function prototypes
 double getU(double V);
+double getUForPos(double V);
+
 namespace ll_control
 {
     // DEBUGGING
@@ -51,6 +53,25 @@ namespace ll_control
       CircularBuffer<double>& control_buffer_m1,
       CircularBuffer<double>& control_buffer_m2)
     {
+
+    double motor1_values[3] = {
+      ((((double)encoder3Val_start_m1-(double)motor1_pos)/1260.0)*360)*M_PI/180, //position in rad/s
+      (r - motor1_values[0]), //error signal in rad
+      (a*control_buffer_m1.getValue(1, 2) + b*motor1_values[1] + c*control_buffer_m1.getValue(1,1) + d*control_buffer_m1.getValue(2, 1) + e*control_buffer_m1.getValue(1, 2)) //control effort
+    };
+
+    double motor2_values[3] = {
+      ((((double)encoder3Val_start_m2 - (double)motor2_pos)/1260.0)*360)*M_PI/180, //position in rad/s
+      ((-r)-motor2_values[0]), //error signal in rad/s
+      (a*control_buffer_m2.getValue(1, 2) + b*motor2_values[1] + c*control_buffer_m2.getValue(1, 1) + d*control_buffer_m2.getValue(2, 1) + e*control_buffer_m2.getValue(1, 2)) //control effort
+    };
+
+    MotorCommand command;
+    command.motor1_pwm = getUForPos(motor1_values[2]);
+    command.motor2_pwm = getUForPos(motor2_values[2]);
+
+    return command;
+
 
     }
     
@@ -168,4 +189,49 @@ double getU(double V)
   }
 
   return result;
+}
+
+//*****************************************************  
+double getUForPos(double V)
+//*****************************************************
+{
+  int result;
+  //double V = scaled;
+  if(V < -8.18 ){
+    result = (67.869*V)+249.736;
+    
+    if(result <= -400){
+      result = -400;
+    }
+  }
+  else if((V >= -8.18) && (V<-5.75)){
+    result = (42.7*V)+72.06;    
+  }
+  else if((V>=-5.75) && (V<-2.5)){
+    
+    result  =  (-0.301*V*V) + 16.898*V - 60.4455;  
+  }
+   else if((V>=-2.5) && (V<-0)){
+    
+    result  =  -150;
+  }
+  else if((V>=0.0) && (V<4)){
+    
+    result  = 150;
+  }
+   else if((V>=4) && (V<5.5)){
+    
+    result  = (15.1688*V) + 65.818;
+  }
+  else if((V>=5.5) && (V < 7.75)){
+    
+    result = 37.1683*V - 40.9424;
+  }
+  else if((V>=7.75)){
+    result = 61.0135*V - 206.4433;
+    if(result >= 400){
+      result = 400;
+    }
+  }
+  return result; 
 }
