@@ -21,7 +21,7 @@ PositionSensor sensor_big_circle(sensor3Pin, sensor3_coefficients);
 
 void setup()
 {
-    Serial.begin(9600);
+    Serial.begin(115200);
 }
 
 void loop()

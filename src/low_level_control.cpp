@@ -56,14 +56,14 @@ namespace ll_control
 
     double motor1_values[3] = {
       ((((double)encoder3Val_start_m1-(double)motor1_pos)/1260.0)*360)*M_PI/180, //position in rad/s
-      (r - motor1_values[0]), //error signal in rad
-      (a*control_buffer_m1.getValue(1, 2) + b*motor1_values[1] + c*control_buffer_m1.getValue(1,1) + d*control_buffer_m1.getValue(2, 1) + e*control_buffer_m1.getValue(1, 2)) //control effort
+      (pos_ref - motor1_values[0]), //error signal in rad
+      (position_compensation::a*control_buffer_m1.getValue(1, 2) + position_compensation::b*motor1_values[1] + position_compensation::c*control_buffer_m1.getValue(1,1) + position_compensation::d*control_buffer_m1.getValue(2, 1) + position_compensation::e*control_buffer_m1.getValue(1, 2)) //control effort
     };
 
     double motor2_values[3] = {
       ((((double)encoder3Val_start_m2 - (double)motor2_pos)/1260.0)*360)*M_PI/180, //position in rad/s
-      ((-r)-motor2_values[0]), //error signal in rad/s
-      (a*control_buffer_m2.getValue(1, 2) + b*motor2_values[1] + c*control_buffer_m2.getValue(1, 1) + d*control_buffer_m2.getValue(2, 1) + e*control_buffer_m2.getValue(1, 2)) //control effort
+      ((-pos_ref)-motor2_values[0]), //error signal in rad/s
+      (position_compensation::a*control_buffer_m2.getValue(1, 2) + position_compensation::b*motor2_values[1] + position_compensation::c*control_buffer_m2.getValue(1, 1) + position_compensation::d*control_buffer_m2.getValue(2, 1) + position_compensation::e*control_buffer_m2.getValue(1, 2)) //control effort
     };
 
     MotorCommand command;
