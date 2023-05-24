@@ -164,21 +164,21 @@ namespace ll_control
       BLA::Matrix<2, 2> C,
       BLA::Matrix<2, 4> F_bar,
       BLA::Matrix<2, 1> y_star,
-      BLA::Matrix<2, 1> yk,
-      BLA::Matrix<2, 1> xk,
-      BLA::Matrix<2, 1> xkp,
-      BLA::Matrix<2, 1> zk,
-      BLA::Matrix<2, 1> zkp,
-      BLA::Matrix<4, 1> wk,
-      BLA::Matrix<2, 1> u)
+      BLA::Matrix<2, 1>& yk,
+      BLA::Matrix<2, 1>& xk,
+      BLA::Matrix<2, 1>& xkp,
+      BLA::Matrix<2, 1>& zk,
+      BLA::Matrix<2, 1>& zkp,
+      BLA::Matrix<4, 1>& wk,
+      BLA::Matrix<2, 1>& u)
   {
     // Measure velocity
-    double vel_r = (60000000.0 * ((encoder3Val_start_m1 - motor1_pos)) / ((double)(newTime - oldTime) * 1260.0)) * M_PI / 30;
-    double vel_l = (60000000.0 * ((encoder3Val_start_m2 - motor2_pos)) / ((double)(newTime - oldTime) * 1260.0)) * M_PI / 30;
+    float vel_r = (60000000.0 * ((encoder3Val_start_m1 - motor1_pos)) / ((double)(newTime - oldTime) * 1260.0)) * M_PI / 30;
+    float vel_l = (60000000.0 * ((encoder3Val_start_m2 - motor2_pos)) / ((double)(newTime - oldTime) * 1260.0)) * M_PI / 30;
 
     // Update measurement vector with linear velocity and angular velocity
     // TODO: Look at warning here
-    yk = {-(0.0175 * vel_r) + (0.0175 * vel_l), unwrap_Heading(yk(3), heading_meas)};
+    yk = {-(0.0175 * vel_r) + (0.0175 * vel_l), unwrap_Heading(yk(0,1), heading_meas)};
 
     // Predict next time step
     xkp = A * xk + (B * u);
@@ -188,8 +188,11 @@ namespace ll_control
     xk = xkp;
     zk = zkp;
 
+    wk = xk && zk;
+
     // calculate control effort
     u = (F_bar * wk);
+
 
     MotorCommand command;
     command.motor1_pwm = getU_R(u(0, 0));
@@ -319,7 +322,7 @@ double getU_R(double R)
 
   if (R <= -4.5)
   {
-    res = R * R * R * R * 0.0086 + R * R * R * 0.3524 + R * R * 3.4233 + R * 18.421 - (62.1883);
+    res = (R * R * R * R * 0.0086) + (R * R * R * 0.3524) + (R * R * 3.4233) + (R * 18.421) - (62.1883);
 
     if (res <= -400)
     {
@@ -334,7 +337,7 @@ double getU_R(double R)
 
   else
   {
-    res = -R * R * R * R * 0.01 + R * R * R * 0.4019 - R * R * 4.0489 + R * 21.1079 + (62.0307);
+    res = -(R * R * R * R * 0.01) + (R * R * R * 0.4019) - (R * R * 4.0489) + (R * 21.1079) + (62.0307);
 
     if (res >= 400)
     {
@@ -353,20 +356,8 @@ double getU_R(double R)
 float unwrap_Heading(float previous_angle, float new_angle)
 {
   // Compute difference between new and previous angle
-  float angle_difference = new_angle - previous_angle;
+  float d = new_angle - previous_angle;
+  d = d > M_PI ? d - 2 * M_PI : (d < -M_PI ? d + 2 * M_PI : d);
+  return previous_angle + d;
 
-  // Adjust the difference to handle the boundary discontinuity
-  if (angle_difference > M_PI)
-  {
-    // If difference is greater than π, subtract 2π to maintain continuity
-    angle_difference -= 2 * M_PI;
-  }
-  else if (angle_difference < -M_PI)
-  {
-    // If difference is less than -π, add 2π to maintain continuity
-    angle_difference += 2 * M_PI;
-  }
-
-  // Add adjusted difference to previous angle and return
-  return previous_angle + angle_difference;
 }

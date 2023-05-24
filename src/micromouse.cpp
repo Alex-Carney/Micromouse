@@ -234,6 +234,16 @@ void setup()
 #ifdef DEBUG_MODE
 #if DEBUG_MODE == 1
     Serial.begin(115200);               // Initialize the Serial Port to view information on the Serial Monitor
+    I2C.begin();
+
+    mySensor.updateAccelConfig();
+
+    Serial.println(mySensor.readAccelRange());
+    Serial.print("Bandwidth: ");
+    Serial.println(mySensor.readAccelBandwidth());
+    Serial.print("Power Mode: ");
+    Serial.println(mySensor.readAccelPowerMode());
+    
     Serial.println("%Streaming in..."); // Countdown
     Serial.print("%3...");
     delay(1000); // Wait for a second
@@ -256,6 +266,14 @@ void loop()
         // Initialization
         MACHINE_STATE = MachineState::DRIVING;
         isFirstStateIteration = true;
+
+        while(true){
+            mySensor.updateEuler();
+            Serial.println(mySensor.readEulerHeading());
+        }
+
+
+
         break;
     case MachineState::DRIVING:
         if (isFirstStateIteration)
@@ -460,6 +478,13 @@ void loop()
         traversal::path_right = sensor_marks.readDistanceCM() > traversal::VALID_PATH_THRESHOLD ? 1 : 0;
         traversal::path_forward = sensor_big_circle.readDistanceCM() > traversal::VALID_PATH_THRESHOLD ? 1 : 0;
 
+        Serial.print("Forward");
+        Serial.println(traversal::path_forward);
+        Serial.print("left");
+        Serial.println(traversal::path_left);
+        Serial.print("right");
+        Serial.println(traversal::path_right);
+
         // make a decision about which way to turn - MAJD
         // TODO: Youssef come here
         if (traversal::path_left == 1)
@@ -485,13 +510,14 @@ void loop()
         break;
     case MachineState::TURNING:
         // Initialization
+        Serial.println("I AM TURNING WOOO");
 
         if (isFirstStateIteration)
         {
             //Sensor Initialization
-            mySensor.initSensor(0x28);          //The I2C Address can be changed here inside this function in the library
-            mySensor.setOperationMode(OPERATION_MODE_NDOF);   //Can be configured to other operation modes as desired
-            mySensor.setUpdateMode(MANUAL);	//The default is AUTO. Changing to manual requires calling the relevant update functions prior to calling the read functions
+            // mySensor.initSensor(0x28);          //The I2C Address can be changed here inside this function in the library
+            // mySensor.setOperationMode(OPERATION_MODE_NDOF);   //Can be configured to other operation modes as desired
+            // mySensor.setUpdateMode(MANUAL);	//The default is AUTO. Changing to manual requires calling the relevant update functions prior to calling the read functions
  
             oldTime = micros();
             turn_control::start_time = oldTime;
@@ -503,6 +529,28 @@ void loop()
             //Find Current Heading and set to start
             turn_control::turn_start = mySensor.readEulerHeading()*M_PI/180;
 
+            switch(turn_control::turn_direction) {
+                case turn_control::TurnCommand::FORWARD:
+                    turn_control::y_star = {0,0};
+                    //break state_machine;
+                    Serial.println("FORWARD");
+                    break;
+                case turn_control::TurnCommand::RIGHT:
+                    turn_control::y_star = {0,M_PI/2};
+                    Serial.println("RIGHT");
+                    break;
+                case turn_control::TurnCommand::LEFT:
+                    turn_control::y_star = {0,-M_PI/2};
+                    Serial.println("LEFT");
+                    break;
+                case turn_control::TurnCommand::BACKWARD:
+                    //NEED TO DO NESTED LEFT TURNS!!!!
+                    //ALEX-GO HERE
+                    turn_control::y_star = {0,-M_PI/2};
+                    Serial.println("BAKWARD");
+                    break;
+
+            }
 
             // Stop wheels just in case
             md.setM1Speed(0);
@@ -511,14 +559,32 @@ void loop()
             isFirstStateIteration = false;
         }
 
-        if(turn_control::start_time >= 3000000){
+        if(newTime - turn_control::start_time >= 10000000){
             isFirstStateIteration = true;
             MACHINE_STATE = MachineState::DRIVING;
             break;
         }
 
+        newTime = micros();
         if (((newTime - lastSampleTime)) >= turn_control::SAMPLING_PERIOD)
         {
+
+            turn_control::motor1_pos = encoder::getEncoderValue(ENCODER_M1);
+            turn_control::motor2_pos = encoder::getEncoderValue(ENCODER_M2);
+            
+            Serial.println("here with ");
+            if(turn_control::turn_direction == turn_control::TurnCommand::LEFT) {
+                Serial.println("bruh");
+            }
+                        if(turn_control::turn_direction == turn_control::TurnCommand::RIGHT) {
+                Serial.println("bruh2");
+            }
+                        if(turn_control::turn_direction == turn_control::TurnCommand::FORWARD) {
+                Serial.println("bruh3");
+            }
+                        if(turn_control::turn_direction == turn_control::TurnCommand::BACKWARD) {
+                Serial.println("bruh4");
+            }
             mySensor.updateEuler();
             mySensor.updateGyro();
 
@@ -526,25 +592,7 @@ void loop()
 
             double heading_meas = (mySensor.readEulerHeading() * M_PI / 180) - turn_control::turn_start;
 
-            switch(turn_control::turn_direction) {
-                case turn_control::TurnCommand::FORWARD:
-                    turn_control::y_star = {0,0};
-                    //break state_machine;
-                    break;
-                case turn_control::TurnCommand::RIGHT:
-                    turn_control::y_star = {0,M_PI/2};
-                    break;
-                case turn_control::TurnCommand::LEFT:
-                    turn_control::y_star = {0,-M_PI/2};
-                    break;
-                case turn_control::TurnCommand::BACKWARD:
-                    //NEED TO DO NESTED LEFT TURNS!!!!
-                    //ALEX-GO HERE
-                    turn_control::y_star = {0,-M_PI/2};
-                    break;
-
-            }
-
+            
             MotorCommand command = ll_control::compensateTurning(
                 turn_control::motor1_pos,
                 turn_control::motor2_pos,
@@ -568,11 +616,23 @@ void loop()
                 turn_control::u
             );
 
+            
+            Serial.print("yk: {");
+            Serial.print(turn_control::yk(0,0));
+            Serial.print(" , ");
+            Serial.print(turn_control::yk(0,1));
+            Serial.println();
+
             // Apply control to motors
             md.setM1Speed((int)command.motor1_pwm);
             md.setM2Speed((int)command.motor2_pwm);
-            oldTime = newTime;
 
+            //Update Data
+            oldTime = newTime;
+            turn_control::encoder3Val_start_m1 = turn_control::motor1_pos;
+            turn_control::encoder3Val_start_m2 = turn_control::motor2_pos;
+
+            
         }
 
         break;

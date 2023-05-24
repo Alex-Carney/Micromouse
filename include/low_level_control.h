@@ -67,13 +67,13 @@ namespace ll_control
         BLA::Matrix<2, 2> C,
         BLA::Matrix<2, 4> F_bar,
         BLA::Matrix<2, 1> y_star,
-        BLA::Matrix<2, 1> yk,
-        BLA::Matrix<2, 1> xk,
-        BLA::Matrix<2, 1> xkp,
-        BLA::Matrix<2, 1> zk,
-        BLA::Matrix<2, 1> zkp,
-        BLA::Matrix<4, 1> wk,
-        BLA::Matrix<2, 1> u);
+        BLA::Matrix<2, 1>& yk,
+        BLA::Matrix<2, 1>& xk,
+        BLA::Matrix<2, 1>& xkp,
+        BLA::Matrix<2, 1>& zk,
+        BLA::Matrix<2, 1>& zkp,
+        BLA::Matrix<4, 1>& wk,
+        BLA::Matrix<2, 1>& u);
 }
 
 #endif // LOW_LEVEL_CONTROL_H
