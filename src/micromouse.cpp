@@ -76,33 +76,6 @@ namespace traversal
 
 }
 
-namespace turning
-{
-    // Constants
-    const int SAMPLING_PERIOD = 10000; // Sampling period in microseconds
-
-    // Globals
-    long encoder3Val_start_m2;
-    long encoder3Val_start_m1;
-    long enc_start_m1;
-    long enc_start_m2;
-    long motor1_pos;
-    long motor2_pos;
-    CircularBuffer<double> control_buffer_m1(2, 3); // 2 steps back. 3 values per step
-    CircularBuffer<double> control_buffer_m2(2, 3); // 2 steps back. 3 values per step
-    double SINGLE_WHEEL_POS_REFERENCE = 3.55;       // (rad) How much to turn one wheel for all turns
-    enum class TurnDirection
-    {
-        LEFT,
-        RIGHT,
-        BACKWARD,
-        FORWARD
-    };
-    TurnDirection turn_direction = TurnDirection::FORWARD;
-    double position_reference_left;
-    double position_reference_right;
-}
-
 namespace pos_control
 {
     // Constants
