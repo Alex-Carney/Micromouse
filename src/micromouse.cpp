@@ -31,7 +31,7 @@ Authors: Alex Carney, Majd Hamdan, Youssef Marzouk, Nick Hagler
 // Object definition prototypes
 ArduinoMotorShieldR3 md;
 NAxisMotion mySensor;
-BasicLinearAlgebra BLA;
+// BasicLinearAlgebra BLA;
 
 // Constant definitions
 const int ENCODER_M1 = 1;
@@ -181,57 +181,6 @@ namespace turn_control
 
 }
 
-// Global variables for TURNING
-namespace turn_control
-{
-    // Constants
-    const int SAMPLING_PERIOD = 20000;                                                         // Sampling Period in microseconds
-    const BLA::Matrix<2, 2> A = {1, 0, 0, 1};                                                  // A_bar Matrix for discrete State-Space System (Identity)
-    const BLA::Matrix<2, 2> B = {0.00035, 0.00035, 0.00423985463355542, -0.00423985463355542}; // B_bar Matrix for discrete State-Space System
-    const BLA::Matrix<2, 2> C = {1, 0, 0, 1};                                                  // C Matrix (Identity) measuring all states
-
-// choose which F matrix to use for turning.
-#if FAST_TURN == 1
-#define F_BAR                                                                                                                                              \
-    {                                                                                                                                                      \
-        -64.7412773115279, -17.5858202697336, 1.42970596701333, 1.26112940780672, -64.9208296716241, 19.7608942866482, 1.44647260526361, -1.46423829030544 \
-    }
-#else
-#define F_BAR                                                                                                                                            \
-    {                                                                                                                                                    \
-        -57.3453085546904, -15.2453582250787, 1.12355118451498, 0.9721973845281, -57.5637281185996, 17.8912645110515, 1.1418253266365, -1.19356797352185 \
-    }
-#endif
-
-    const BLA::Matrix<2, 4> F_bar = F_BAR; // assign the controller gain matrix F
-
-    // Globals
-    long motor1_pos;
-    long motor2_pos;
-    long start_time;
-    double motor1_reference_speed;
-    double motor2_reference_speed;
-    long encoder3Val_start_m2;
-    long encoder3Val_start_m1;
-    double turn_start;
-
-    // state vectors
-    BLA::Matrix<2, 1> xk = {0, 0};  // x(k) vector
-    BLA::Matrix<2, 1> xkp = {0, 0}; // x(k+1) vector
-    // controller vectors
-    BLA::Matrix<2, 1> zk = {0, 0};  // z(k) vector
-    BLA::Matrix<2, 1> zkp = {0, 0}; // z(k+1) vector
-
-    // Measurement vector
-    BLA::Matrix<2, 1> yk = {0, 0};
-
-    // controller
-    BLA::Matrix<2, 1> u = {0, 0};
-
-    // Full System Vector
-    BLA::Matrix<4, 1> wk = xk && zk; // Vertically concatenate xk and zk [xk;zk]
-
-}
 // State machine definitions
 enum class MachineState
 {
@@ -490,22 +439,23 @@ void loop()
         traversal::path_forward = sensor_big_circle.readDistanceCM() > traversal::VALID_PATH_THRESHOLD ? 1 : 0;
 
         // make a decision about which way to turn - MAJD
-        if (traversal::path_left == 1)
-        {
-            turning::turn_direction = turning::TurnDirection::LEFT;
-        }
-        else if (traversal::path_right == 1)
-        {
-            turning::turn_direction = turning::TurnDirection::RIGHT;
-        }
-        else if (traversal::path_forward == 1)
-        {
-            turning::turn_direction = turning::TurnDirection::FORWARD;
-        }
-        else
-        {
-            turning::turn_direction = turning::TurnDirection::BACKWARD;
-        }
+        // TODO: Youssef come here
+        // if (traversal::path_left == 1)
+        // {
+        //     turning::turn_direction = turning::TurnDirection::LEFT;
+        // }
+        // else if (traversal::path_right == 1)
+        // {
+        //     turning::turn_direction = turning::TurnDirection::RIGHT;
+        // }
+        // else if (traversal::path_forward == 1)
+        // {
+        //     turning::turn_direction = turning::TurnDirection::FORWARD;
+        // }
+        // else
+        // {
+        //     turning::turn_direction = turning::TurnDirection::BACKWARD;
+        // }
         // set state to turning
         MACHINE_STATE = MachineState::TURNING;
         isFirstStateIteration = true;
@@ -537,7 +487,7 @@ void loop()
 
             lastSampleTime = newTime;
 
-            double heading_meas = (mySensor.readEulerHeading()*M_PI/180)-turn_control::turn_start);
+            double heading_meas = (mySensor.readEulerHeading() * M_PI / 180) - turn_control::turn_start;
         }
         break;
     case MachineState::PROCESS_STOPPED:
