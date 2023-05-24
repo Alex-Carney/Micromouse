@@ -192,6 +192,7 @@ namespace ll_control
     MotorCommand command;
     command.motor1_pwm = getU_R(u(0, 0));
     command.motor2_pwm = getU_R(-u(0, 1));
+    command.next_state = false;
 
     return command;
   }
