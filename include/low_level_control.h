@@ -36,7 +36,8 @@ namespace ll_control
      * @author Nick Hagler
     */
     MotorCommand compensateMousePosition(
-      double pos_ref,
+      double pos_left,
+      double pos_right,
       long motor1_pos,
       long motor2_pos,
       long newTime,

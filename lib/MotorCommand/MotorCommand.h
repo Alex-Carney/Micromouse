@@ -9,6 +9,7 @@
 struct MotorCommand {
     double motor1_pwm;
     double motor2_pwm;
+    bool next_state;
 };
 
 #endif  // MOTORCOMMAND_H
