@@ -11,6 +11,7 @@
 #include "ArduinoMotorShieldR3.h"
 #include "CircularBuffer.h"
 #include "MotorCommand.h"
+#include "BasicLinearAlgebra.h"
 
 namespace ll_control
 {

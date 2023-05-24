@@ -162,10 +162,15 @@ namespace turn_control
     long encoder3Val_start_m2;
     long encoder3Val_start_m1;
     double turn_start;
+    
+
+    //Target Vector
+    BLA::Matrix<2,1> y_star;
 
     // state vectors
     BLA::Matrix<2, 1> xk = {0, 0};  // x(k) vector
     BLA::Matrix<2, 1> xkp = {0, 0}; // x(k+1) vector
+    
     // controller vectors
     BLA::Matrix<2, 1> zk = {0, 0};  // z(k) vector
     BLA::Matrix<2, 1> zkp = {0, 0}; // z(k+1) vector
@@ -178,6 +183,15 @@ namespace turn_control
 
     // Full System Vector
     BLA::Matrix<4, 1> wk = xk && zk; // Vertically concatenate xk and zk [xk;zk]
+
+    enum class TurnCommand
+    {
+        FORWARD,
+        LEFT,
+        RIGHT,
+        BACKWARD
+    };
+    TurnCommand turn_direction = TurnCommand::FORWARD;
 
 }
 
@@ -210,6 +224,12 @@ void setup()
     // Motor Initialization
     md.init();
 
+    //Sensor Initialization
+    mySensor.initSensor(0x28);          //The I2C Address can be changed here inside this function in the library
+    mySensor.setOperationMode(OPERATION_MODE_NDOF);   //Can be configured to other operation modes as desired
+    mySensor.setUpdateMode(MANUAL);	//The default is AUTO. Changing to manual requires calling the relevant update functions prior to calling the read functions
+  
+
 // Peripheral Initialization
 #ifdef DEBUG_MODE
 #if DEBUG_MODE == 1
@@ -228,6 +248,7 @@ void setup()
 void loop()
 {
     // Main loop
+    state_machine:
     switch (MACHINE_STATE)
     {
     case MachineState::INITIALIZING:
@@ -427,6 +448,7 @@ void loop()
                 md.setM1Speed(0);
                 md.setM2Speed(0);
                 MACHINE_STATE = MachineState::LOGIC;
+                isFirstStateIteration = true;
             }
         }
         break;
@@ -440,22 +462,22 @@ void loop()
 
         // make a decision about which way to turn - MAJD
         // TODO: Youssef come here
-        // if (traversal::path_left == 1)
-        // {
-        //     turning::turn_direction = turning::TurnDirection::LEFT;
-        // }
-        // else if (traversal::path_right == 1)
-        // {
-        //     turning::turn_direction = turning::TurnDirection::RIGHT;
-        // }
-        // else if (traversal::path_forward == 1)
-        // {
-        //     turning::turn_direction = turning::TurnDirection::FORWARD;
-        // }
-        // else
-        // {
-        //     turning::turn_direction = turning::TurnDirection::BACKWARD;
-        // }
+        if (traversal::path_left == 1)
+        {
+            turn_control::turn_direction = turn_control::TurnCommand::LEFT;
+        }
+        else if (traversal::path_right == 1)
+        {
+            turn_control::turn_direction = turn_control::TurnCommand::RIGHT;
+        }
+        else if (traversal::path_forward == 1)
+        {
+            turn_control::turn_direction = turn_control::TurnCommand::FORWARD;
+        }
+        else
+        {
+            turn_control::turn_direction = turn_control::TurnCommand::BACKWARD;
+        }
         // set state to turning
         MACHINE_STATE = MachineState::TURNING;
         isFirstStateIteration = true;
@@ -466,18 +488,33 @@ void loop()
 
         if (isFirstStateIteration)
         {
-
+            //Sensor Initialization
+            mySensor.initSensor(0x28);          //The I2C Address can be changed here inside this function in the library
+            mySensor.setOperationMode(OPERATION_MODE_NDOF);   //Can be configured to other operation modes as desired
+            mySensor.setUpdateMode(MANUAL);	//The default is AUTO. Changing to manual requires calling the relevant update functions prior to calling the read functions
+ 
             oldTime = micros();
+            turn_control::start_time = oldTime;
             lastSampleTime = oldTime;
             turn_control::start_time = oldTime;
             turn_control::encoder3Val_start_m1 = encoder::getEncoderValue(ENCODER_M1); // Starting value for the encoder
             turn_control::encoder3Val_start_m2 = encoder::getEncoderValue(ENCODER_M2);
+
+            //Find Current Heading and set to start
+            turn_control::turn_start = mySensor.readEulerHeading()*M_PI/180;
+
 
             // Stop wheels just in case
             md.setM1Speed(0);
             md.setM2Speed(0);
 
             isFirstStateIteration = false;
+        }
+
+        if(turn_control::start_time >= 3000000){
+            isFirstStateIteration = true;
+            MACHINE_STATE = MachineState::DRIVING;
+            break;
         }
 
         if (((newTime - lastSampleTime)) >= turn_control::SAMPLING_PERIOD)
@@ -488,7 +525,56 @@ void loop()
             lastSampleTime = newTime;
 
             double heading_meas = (mySensor.readEulerHeading() * M_PI / 180) - turn_control::turn_start;
+
+            switch(turn_control::turn_direction) {
+                case turn_control::TurnCommand::FORWARD:
+                    turn_control::y_star = {0,0};
+                    //break state_machine;
+                    break;
+                case turn_control::TurnCommand::RIGHT:
+                    turn_control::y_star = {0,M_PI/2};
+                    break;
+                case turn_control::TurnCommand::LEFT:
+                    turn_control::y_star = {0,-M_PI/2};
+                    break;
+                case turn_control::TurnCommand::BACKWARD:
+                    //NEED TO DO NESTED LEFT TURNS!!!!
+                    //ALEX-GO HERE
+                    turn_control::y_star = {0,-M_PI/2};
+                    break;
+
+            }
+
+            MotorCommand command = ll_control::compensateTurning(
+                turn_control::motor1_pos,
+                turn_control::motor2_pos,
+                newTime,
+                oldTime,
+                turn_control::encoder3Val_start_m1,
+                turn_control::encoder3Val_start_m2,
+                turn_control::turn_start,
+                heading_meas,
+                turn_control::A,
+                turn_control::B,
+                turn_control::C,
+                turn_control::F_bar,
+                turn_control::y_star,
+                turn_control::yk,
+                turn_control::xk,
+                turn_control::xkp,
+                turn_control::zk,
+                turn_control::zkp,
+                turn_control::wk,
+                turn_control::u
+            );
+
+            // Apply control to motors
+            md.setM1Speed((int)command.motor1_pwm);
+            md.setM2Speed((int)command.motor2_pwm);
+            oldTime = newTime;
+
         }
+
         break;
     case MachineState::PROCESS_STOPPED:
         // Stop motors
