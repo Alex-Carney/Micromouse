@@ -248,7 +248,7 @@ void setup()
 void loop()
 {
     // Main loop
-    state_machine:
+    
     switch (MACHINE_STATE)
     {
     case MachineState::INITIALIZING:
