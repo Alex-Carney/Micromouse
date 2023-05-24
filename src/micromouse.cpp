@@ -4,8 +4,9 @@
 #include "BasicLinearAlgebra.h"
 #include "CircularBuffer.h"
 #include "low_level_control.h"
-#include "PositionSensor.h"
+#include "NAxisMotion.h"
 #include "MotorCommand.h"
+#include "PositionSensor.h"
 #include <Arduino.h>
 
 /****************************************************/
