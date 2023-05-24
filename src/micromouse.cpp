@@ -1,6 +1,7 @@
 #include <SPI.h>
 #include "ArduinoMotorShieldR3.h"
 #include "ArduinoMotorEncoder.h"
+#include "BasicLinearAlgebra.h"
 #include "CircularBuffer.h"
 #include "low_level_control.h"
 #include "PositionSensor.h"
@@ -20,8 +21,16 @@ Authors: Alex Carney, Majd Hamdan, Youssef Marzouk, Nick Hagler
 #define DEBUG_MODE 1
 #define WALL_FOLLOW 1
 
+//Set Turning Control Gains
+#define FAST_TURN 1
+
+//Define a macro for Pi
+#define M_PI 3.14159265358979323846
+
 // Object definition prototypes
 ArduinoMotorShieldR3 md;
+NAxisMotion mySensor;                 
+BasicLinearAlgebra BLA;
 
 // Constant definitions
 const int ENCODER_M1 = 1;
@@ -105,6 +114,55 @@ namespace drive_control
     CircularBuffer<double> control_buffer_m1(2, 3); // 2 steps back. 3 values per step
     CircularBuffer<double> control_buffer_m2(2, 3); // 2 steps back. 3 values per step
     const double DEL_X_GAIN = 0.1;
+}
+
+//Global variables for TURNING
+namespace turn_control
+{
+    //Constants
+    const int SAMPLING_PERIOD = 20000; //Sampling Period in microseconds
+    const BLA::Matrix<2,2> A = {1,0,0,1}; //A_bar Matrix for discrete State-Space System (Identity)
+    const BLA::Matrix<2,2> B = {0.00035,0.00035,0.00423985463355542,-0.00423985463355542}; //B_bar Matrix for discrete State-Space System
+    const BLA::Matrix<2,2> C = {1,0,0,1}; //C Matrix (Identity) measuring all states
+    
+    //choose which F matrix to use for turning. 
+    #if FAST_TURN == 1
+        #define F_BAR {-64.7412773115279,-17.5858202697336,1.42970596701333,1.26112940780672,-64.9208296716241,19.7608942866482,1.44647260526361,-1.46423829030544}
+    #else
+        #define F_BAR {-57.3453085546904,-15.2453582250787,1.12355118451498,0.9721973845281,-57.5637281185996,17.8912645110515,1.1418253266365,-1.19356797352185}
+    #endif
+    
+    const BLA::Matrix<2,4> F_bar = F_BAR;//assign the controller gain matrix F
+
+
+    //Globals
+    long motor1_pos;
+    long motor2_pos;
+    long start_time;
+    double motor1_reference_speed;
+    double motor2_reference_speed;
+    long encoder3Val_start_m2;
+    long encoder3Val_start_m1;
+    double turn_start;
+
+    //state vectors
+    BLA::Matrix<2,1> xk = {0,0}; //x(k) vector
+    BLA::Matrix<2,1> xkp = {0,0}; //x(k+1) vector
+    //controller vectors
+    BLA::Matrix<2,1> zk = {0,0}; //z(k) vector
+    BLA::Matrix<2,1> zkp = {0,0}; //z(k+1) vector
+
+    //Measurement vector
+    BLA::Matrix<2,1> yk = {0,0};
+
+    //controller
+    BLA::Matrix<2,1> u = {0,0};
+
+    //Full System Vector
+    BLA::Matrix<4,1> wk = xk && zk; //Vertically concatenate xk and zk [xk;zk]
+
+
+
 }
 // State machine definitions
 enum class MachineState
@@ -256,6 +314,7 @@ void loop()
 
         break;
     case MachineState::DECELERATING:
+
         // Initialization
         if (isFirstStateIteration)
         {
@@ -311,6 +370,35 @@ void loop()
         break;
     case MachineState::TURNING:
         // Initialization
+        
+        if (isFirstStateIteration)
+        {
+            
+            oldTime = micros();
+            lastSampleTime = oldTime;
+            turn_control::start_time = oldTime;
+            turn_control::encoder3Val_start_m1 = encoder::getEncoderValue(ENCODER_M1); // Starting value for the encoder
+            turn_control::encoder3Val_start_m2 = encoder::getEncoderValue(ENCODER_M2);
+
+            // Stop wheels just in case
+            md.setM1Speed(0);
+            md.setM2Speed(0);
+
+            isFirstStateIteration = false;
+        }
+
+        
+        if (((newTime - lastSampleTime)) >= turn_control::SAMPLING_PERIOD)
+        {
+            mySensor.updateEuler();
+            mySensor.updateGyro();
+
+            lastSampleTime = newTime;
+
+            double heading_meas = (mySensor.readEulerHeading()*M_PI/180)-turn_control::turn_start);
+
+
+        }
         break;
     case MachineState::PROCESS_STOPPED:
         // Stop motors
