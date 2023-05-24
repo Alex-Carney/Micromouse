@@ -35,15 +35,16 @@ namespace ll_control
 
     // Compensator Constants Position Control
     namespace position_compensation {
-      const double a = 1.429;  // coefficient for u[k-1]
-      const double b = .6202; // coefficient for e[k]
-      const double c = .03096; // coefficient for e[k-1]
-      const double d = -.5892; // coefficient for e[k-2]
-      const double e = -.4286; // coefficient for u[k-2]
+      const double a = 1.81;  // coefficient for u[k-1]
+      const double b = 1.18* 0.2516;//.1936; // coefficient for e[k]
+      const double c = 1.18* 0.0032;//.002463; // coefficient for e[k-1]
+      const double d = 1.18* -.2484;//-.1912; // coefficient for e[k-2]
+      const double e = -.8182; // coefficient for u[k-2]
     }
 
     MotorCommand compensateMousePosition(
-      double pos_ref,
+      double pos_left,
+      double pos_right,
       long motor1_pos,
       long motor2_pos,
       long newTime,
@@ -56,19 +57,27 @@ namespace ll_control
 
     double motor1_values[3] = {
       ((((double)encoder3Val_start_m1-(double)motor1_pos)/1260.0)*360)*M_PI/180, //position in rad/s
-      (pos_ref - motor1_values[0]), //error signal in rad
+      (pos_left - motor1_values[0]), //error signal in rad
       (position_compensation::a*control_buffer_m1.getValue(1, 2) + position_compensation::b*motor1_values[1] + position_compensation::c*control_buffer_m1.getValue(1,1) + position_compensation::d*control_buffer_m1.getValue(2, 1) + position_compensation::e*control_buffer_m1.getValue(1, 2)) //control effort
     };
 
     double motor2_values[3] = {
       ((((double)encoder3Val_start_m2 - (double)motor2_pos)/1260.0)*360)*M_PI/180, //position in rad/s
-      ((-pos_ref)-motor2_values[0]), //error signal in rad/s
+      ((-pos_right)-motor2_values[0]), //error signal in rad/s
       (position_compensation::a*control_buffer_m2.getValue(1, 2) + position_compensation::b*motor2_values[1] + position_compensation::c*control_buffer_m2.getValue(1, 1) + position_compensation::d*control_buffer_m2.getValue(2, 1) + position_compensation::e*control_buffer_m2.getValue(1, 2)) //control effort
     };
 
     MotorCommand command;
     command.motor1_pwm = getUForPos(motor1_values[2]);
     command.motor2_pwm = getUForPos(motor2_values[2]);
+
+    // print out the error values, motor1_values[1] and motor2_values[1]
+
+    if(abs(motor1_values[1]) < .1 && abs(motor2_values[1]) < .1) {
+        command.next_state = true;
+      } else {
+        command.next_state = false;
+    }
 
     return command;
 
@@ -134,6 +143,8 @@ namespace ll_control
         MotorCommand command;
         command.motor1_pwm = getU(motor1_values[2]);
         command.motor2_pwm = getU(motor2_values[2]);
+        command.next_state = false;
+        
 
         return command;
     }

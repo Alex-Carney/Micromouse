@@ -20,6 +20,9 @@ Authors: Alex Carney, Majd Hamdan, Youssef Marzouk, Nick Hagler
 #define DEBUG_MODE 1
 #define WALL_FOLLOW 1
 
+// Define a macro for PI
+#define M_PI 3.14159265358979323846
+
 // Object definition prototypes
 ArduinoMotorShieldR3 md;
 
@@ -36,6 +39,7 @@ bool isWall(float dist_front_cm);
 long newTime = 0;
 long oldTime = 0;
 long lastSampleTime = 0;
+double WHEEL_CIRCUMFERENCE = 22; //cm
 
 // Position Sensors
 float sensor1_coefficients[] = {2.2e4, -1.227};
@@ -47,13 +51,14 @@ PositionSensor sensor_big_circle((int)A9, sensor3_coefficients);
 
 namespace traversal
 {
-    // Constants
-    const int PATH_DISTANCE_THRESHOLD = 20; // (cm) Distance threshold for path detection
-    const int STOP_DISTANCE_THRESHOLD = 20; // (cm) Distance threshold for stopping at a wall (front only)
-
-    const int INTERSECTION_WALK_DISTANCE = 20; // (cm) Distance to walk once intersection is found
-    const int DESIRED_WALL_DIST = 15; // (cm) Distance to keep from wall, when a front wall is present
+    // Constants for stopping
+    const int PATH_DISTANCE_DIFFERENTIAL_THRESHOLD = 10; // (cm) If the difference in distance is greater than this, it's an intersection
+    const int STOP_DISTANCE_THRESHOLD = 24; // (cm) Distance threshold for stopping at a wall (front only)
+    const int INTERSECTION_WALK_DISTANCE = 15; // (cm) Distance to walk once intersection is found
+    const int DESIRED_WALL_DIST = 11; // (cm) Distance to keep from wall, when a front wall is present
  
+    // Constants for turning
+    const int VALID_PATH_THRESHOLD = 20; // (cm) If the distance to the left,right,forward wall is less than this, it's a valid path
 
     // Globals
     // For Path managing and maze traversal
@@ -65,10 +70,36 @@ namespace traversal
 
 }
 
+namespace turning
+{
+    // Constants
+    const int SAMPLING_PERIOD = 10000; // Sampling period in microseconds
+
+    // Globals
+    long encoder3Val_start_m2;
+    long encoder3Val_start_m1;
+    long enc_start_m1;
+    long enc_start_m2;
+    long motor1_pos;
+    long motor2_pos;
+    CircularBuffer<double> control_buffer_m1(2, 3); // 2 steps back. 3 values per step
+    CircularBuffer<double> control_buffer_m2(2, 3); // 2 steps back. 3 values per step
+    double SINGLE_WHEEL_POS_REFERENCE = 3.55; // (rad) How much to turn one wheel for all turns
+    enum class TurnDirection {
+        LEFT,
+        RIGHT,
+        BACKWARD,
+        FORWARD
+    };
+    TurnDirection turn_direction = TurnDirection::FORWARD;
+    double position_reference_left;
+    double position_reference_right;
+}
+
 namespace pos_control
 {
     // Constants
-    const int SAMPLING_PERIOD = 40000; // Sampling period in microseconds
+    const int SAMPLING_PERIOD = 10000; // Sampling period in microseconds
 
     // Globals
     long encoder3Val_start_m2;
@@ -81,7 +112,12 @@ namespace pos_control
     CircularBuffer<double> control_buffer_m2(2, 3); // 2 steps back. 3 values per step
     double position_reference;
 
-    int front_wall_mode = 0; // 0: no wall, 1: wall
+    //int front_wall_mode = 0; // 0: no wall, 1: wall
+    enum class StopMode {
+        WALL_PRESENT,
+        NO_WALL
+    };
+    StopMode stop_mode = StopMode::NO_WALL;
 }
 
 // Global variables for DRIVING
@@ -104,7 +140,12 @@ namespace drive_control
     // 0: velocity, 1: error, 2: control effort
     CircularBuffer<double> control_buffer_m1(2, 3); // 2 steps back. 3 values per step
     CircularBuffer<double> control_buffer_m2(2, 3); // 2 steps back. 3 values per step
-    const double DEL_X_GAIN = 0.1;
+    const double DEL_X_GAIN = 0.05;
+
+    // when to turn on wall following
+    const long WALL_FOLLOW_TIME = 2200000; // 2.1 seconds
+    long time_started_driving = 0;
+    bool control_based_on_wall = false;
 }
 // State machine definitions
 enum class MachineState
@@ -181,6 +222,8 @@ void loop()
             traversal::pre_distance_left = sensor_marks.readDistanceCM();
 
             isFirstStateIteration = false;
+            drive_control::time_started_driving = micros();
+            drive_control::control_based_on_wall = false;
         }
 
         newTime = micros();
@@ -194,6 +237,13 @@ void loop()
 
             lastSampleTime = newTime;
 
+            // Check if we should turn on wall following
+            if(drive_control::control_based_on_wall == false) {
+                if((newTime - drive_control::time_started_driving) > drive_control::WALL_FOLLOW_TIME) {
+                    drive_control::control_based_on_wall = true;
+                }
+            }
+
             // Measure distances to both walls, in CM 
             float dist_left_cm = sensor_mini_right.readDistanceCM();
             float dist_right_cm = sensor_marks.readDistanceCM();
@@ -201,17 +251,26 @@ void loop()
 
             // Measure front distance for later
             float dist_front_cm = sensor_big_circle.readDistanceCM();
-            Serial.println(dist_front_cm);
+            //Serial.println(dist_front_cm);
+            // // Print distances to left and right wall minus threshold
+            // Serial.print("Left: ");
+            // Serial.println(dist_left_cm - traversal::pre_distance_left);
+            // Serial.print("Right: ");
+            // Serial.println(dist_right_cm - traversal::pre_distance_right);
 
             bool wall = isWall(dist_front_cm);
             bool intersection = isIntersection(dist_left_cm, dist_right_cm);
-            if(wall || intersection) {
+            // Update pre distances for next iteration
+            traversal::pre_distance_left = dist_left_cm;
+            traversal::pre_distance_right = dist_right_cm;
+            if( (wall || intersection) && drive_control::control_based_on_wall == true) {
                 Serial.println("IM IN HERE!!!");
                 Serial.println("I AM HERE BECAUSE OF A ");
                 Serial.println(wall ? "WALL" : "INTERSECTION");
                 md.setM1Speed(0);
                 md.setM2Speed(0);
-                pos_control::front_wall_mode = (int)wall;
+                //pos_control::front_wall_mode = (int)wall;
+                pos_control::stop_mode = wall ? pos_control::StopMode::WALL_PRESENT : pos_control::StopMode::NO_WALL;
                 MACHINE_STATE = MachineState::DECELERATING;
                 isFirstStateIteration = true;
                 break; // Cancel this state early! Don't compensate 
@@ -223,8 +282,14 @@ void loop()
             // Calculate new reference speeds - only if wall following on 
             #ifdef WALL_FOLLOW
             #if WALL_FOLLOW == 1
-            drive_control::motor1_reference_speed = min(drive_control::MAX_SPEED_RADS + delWRef, 4.0);
-            drive_control::motor2_reference_speed = min(drive_control::MAX_SPEED_RADS - delWRef, 4.0);
+            if(drive_control::control_based_on_wall == true) {
+                drive_control::motor1_reference_speed = min(drive_control::MAX_SPEED_RADS + delWRef, 4.0);
+                drive_control::motor2_reference_speed = min(drive_control::MAX_SPEED_RADS - delWRef, 4.0);
+            } else {
+                drive_control::motor1_reference_speed = drive_control::MAX_SPEED_RADS;
+                drive_control::motor2_reference_speed = drive_control::MAX_SPEED_RADS;
+            }
+
             #else
             drive_control::motor1_reference_speed = drive_control::MAX_SPEED_RADS;
             drive_control::motor2_reference_speed = drive_control::MAX_SPEED_RADS;
@@ -271,24 +336,33 @@ void loop()
 
             isFirstStateIteration = false;
 
+            md.setM1Speed(0);
+            md.setM2Speed(0);
+            delay(200);
+
+            double curr_pos_from_wall = sensor_big_circle.readDistanceCM();
+            double pos_to_move_rad = ((curr_pos_from_wall - traversal::DESIRED_WALL_DIST) * 2 * M_PI) / WHEEL_CIRCUMFERENCE;
+
+            if(pos_control::stop_mode == pos_control::StopMode::WALL_PRESENT) {
+                // Compensate distance based on wall
+                pos_control::position_reference = pos_to_move_rad;
+            } else {
+                // No wall to compensate for
+                pos_control::position_reference = (traversal::INTERSECTION_WALK_DISTANCE * 2 * M_PI) / WHEEL_CIRCUMFERENCE;
+            }
+
         }
-        if (((newTime - lastSampleTime)) >= drive_control::SAMPLING_PERIOD)
+        // not first run
+        newTime = micros();
+        if (((newTime - lastSampleTime)) >= pos_control::SAMPLING_PERIOD)
         {
             // Collect data
             pos_control::motor1_pos = encoder::getEncoderValue(ENCODER_M1) - pos_control::enc_start_m1;
             pos_control::motor2_pos = encoder::getEncoderValue(ENCODER_M2) - pos_control::enc_start_m2;
             lastSampleTime = newTime;
-            float curr_pos_from_wall = sensor_big_circle.readDistanceCM();
-
-            if(pos_control::front_wall_mode == 1) {
-                // Compensate distance based on wall
-                pos_control::position_reference = curr_pos_from_wall - traversal::DESIRED_WALL_DIST;
-            } else {
-                // No wall to compensate for
-                pos_control::position_reference = traversal::INTERSECTION_WALK_DISTANCE;
-            }
 
             MotorCommand command = ll_control::compensateMousePosition(
+                pos_control::position_reference,
                 pos_control::position_reference,
                 pos_control::motor1_pos,
                 pos_control::motor2_pos,
@@ -302,15 +376,112 @@ void loop()
             // Apply control to motors
             md.setM1Speed((int)command.motor1_pwm);
             md.setM2Speed((int)command.motor2_pwm);
-
             oldTime = newTime;
+
+            if(command.next_state == true) {
+                Serial.print("Zero ESS");
+                md.setM1Speed(0);
+                md.setM2Speed(0);
+                MACHINE_STATE = MachineState::LOGIC;
+            }
         }
         break;
     case MachineState::LOGIC:
         // Initialization
+        delay(100);
+        // Check what directions are valid
+        traversal::path_left = sensor_mini_right.readDistanceCM() > traversal::VALID_PATH_THRESHOLD ? 1 : 0;
+        traversal::path_right = sensor_marks.readDistanceCM() > traversal::VALID_PATH_THRESHOLD ? 1 : 0;
+        traversal::path_forward = sensor_big_circle.readDistanceCM() > traversal::VALID_PATH_THRESHOLD ? 1 : 0;
+
+        // make a decision about which way to turn - MAJD
+        if(traversal::path_left == 1) {
+            turning::turn_direction = turning::TurnDirection::LEFT;
+        } else if(traversal::path_right == 1) {
+            turning::turn_direction = turning::TurnDirection::RIGHT;
+        } else if(traversal::path_forward == 1) {
+            turning::turn_direction = turning::TurnDirection::FORWARD;
+        } else {
+            turning::turn_direction = turning::TurnDirection::BACKWARD;
+        }
+        // set state to turning
+        MACHINE_STATE = MachineState::TURNING;
+        isFirstStateIteration = true;
+
         break;
     case MachineState::TURNING:
         // Initialization
+        if(isFirstStateIteration) {
+            oldTime = micros();
+            lastSampleTime = oldTime;
+            // This seems pointless but it's not mine to change
+            turning::encoder3Val_start_m1 = encoder::getEncoderValue(ENCODER_M1); // Starting value for the encoder
+            turning::encoder3Val_start_m2 = encoder::getEncoderValue(ENCODER_M2);
+            turning::enc_start_m1 = turning::encoder3Val_start_m1;
+            turning::enc_start_m2 = turning::encoder3Val_start_m2;
+            turning::encoder3Val_start_m1 = 0;
+            turning::encoder3Val_start_m2 = 0;
+
+            isFirstStateIteration = false;
+
+            md.setM1Speed(0);
+            md.setM2Speed(0);
+            delay(200);
+        }
+
+        newTime = micros();
+        if (((newTime - lastSampleTime)) >= turning::SAMPLING_PERIOD)
+        {
+            // Collect data
+            turning::motor1_pos = encoder::getEncoderValue(ENCODER_M1) - turning::enc_start_m1;
+            turning::motor2_pos = encoder::getEncoderValue(ENCODER_M2) - turning::enc_start_m2;
+            lastSampleTime = newTime;
+
+            // Calculate reference position
+            switch(turning::turn_direction) {
+                case turning::TurnDirection::LEFT:
+                    turning::position_reference_left = -turning::SINGLE_WHEEL_POS_REFERENCE;
+                    turning::position_reference_right = turning::SINGLE_WHEEL_POS_REFERENCE;
+                    break;
+                case turning::TurnDirection::RIGHT:
+                    turning::position_reference_left = turning::SINGLE_WHEEL_POS_REFERENCE;
+                    turning::position_reference_right = -turning::SINGLE_WHEEL_POS_REFERENCE;
+                    break;
+                case turning::TurnDirection::FORWARD:
+                    turning::position_reference_left = 0;
+                    turning::position_reference_right = 0;
+                    break;
+                case turning::TurnDirection::BACKWARD:
+                    turning::position_reference_left = -turning::SINGLE_WHEEL_POS_REFERENCE;
+                    turning::position_reference_right = -turning::SINGLE_WHEEL_POS_REFERENCE;
+                    break;
+            }
+
+            MotorCommand command = ll_control::compensateMousePosition(
+                turning::position_reference_left,
+                turning::position_reference_right,
+                turning::motor1_pos,
+                turning::motor2_pos,
+                newTime,
+                oldTime,
+                turning::encoder3Val_start_m1,
+                turning::encoder3Val_start_m2,
+                turning::control_buffer_m1,
+                turning::control_buffer_m2);
+
+            // Apply control to motors
+            md.setM1Speed((int)command.motor1_pwm);
+            md.setM2Speed((int)command.motor2_pwm);
+            oldTime = newTime;
+
+            if(command.next_state == true) {
+                Serial.print("Zero ESS");
+                md.setM1Speed(0);
+                md.setM2Speed(0);
+                MACHINE_STATE = MachineState::DRIVING;
+                isFirstStateIteration = true;
+            }
+        }
         break;
     case MachineState::PROCESS_STOPPED:
         // Stop motors
@@ -324,20 +495,21 @@ void loop()
 
 bool isIntersection(float dist_left_cm, float dist_right_cm)
 {
+
     // Check if intersection
-    if (dist_left_cm - traversal::pre_distance_left > traversal::PATH_DISTANCE_THRESHOLD)
+    if (abs(dist_left_cm - traversal::pre_distance_left) > traversal::PATH_DISTANCE_DIFFERENTIAL_THRESHOLD)
     {
         // double check its not a glitch reading
-        if (sensor_marks.readDistanceCM() - traversal::pre_distance_left > traversal::PATH_DISTANCE_THRESHOLD)
+        if (abs(sensor_marks.readDistanceCM() - traversal::pre_distance_left) > traversal::PATH_DISTANCE_DIFFERENTIAL_THRESHOLD)
         {
             traversal::pre_distance_left = dist_left_cm;
             return true;
         }
     }
-    if (dist_right_cm - traversal::pre_distance_right > traversal::PATH_DISTANCE_THRESHOLD)
+    if (abs(dist_right_cm - traversal::pre_distance_right) > traversal::PATH_DISTANCE_DIFFERENTIAL_THRESHOLD)
     {
         // double check its not a glitch reading
-        if (sensor_mini_right.readDistanceCM() - traversal::pre_distance_right > traversal::PATH_DISTANCE_THRESHOLD)
+        if (abs(sensor_mini_right.readDistanceCM() - traversal::pre_distance_right) > traversal::PATH_DISTANCE_DIFFERENTIAL_THRESHOLD)
         {
             traversal::pre_distance_right = dist_right_cm;
             return true; 
