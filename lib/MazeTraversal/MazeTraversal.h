@@ -20,6 +20,8 @@ public:
     MazeTraversal(int numRows, int numCols, int *maze);
     // Methods
     bool traverse(int startRow, int startCol, int endRow, int endCol);
+    // For maze given as an array
+    bool logicTraverse(int startRow, int startCol, int endRow, int endCol);
 
 private:
     /* Here we assume the maze is given as a 2D matrix for demonstration purposes.
@@ -46,10 +48,11 @@ private:
     void push(Cell cell);
     Cell pop();
 
+    bool initilizeTraversal();
     bool isPassage(Cell cell);
     bool isVisited(Cell cell);
-    bool isDestination(Cell cell);
-    bool dfs(Cell currentCell, Cell endCell);
+    bool isDestination();
+    bool dfs(Cell currentCell, Cell endCell); // For maze given as array
     void resizeVisited(int newNumRows, int newNumCols);
 
     bool canGoLeft();
