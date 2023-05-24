@@ -98,10 +98,29 @@ void MazeTraversal::resizeVisited(int newNumRows, int newNumCols)
 }
 
 
+bool MazeTraversal::initilizeTraversal(){
+
+    // clear visited array and stack
+    for (int i = 0; i < numRows; i++)
+    {
+        for (int j = 0; j < numCols; j++)
+        {
+            visited[i][j] = false;
+        }
+    }
+    top = 0;
+    Cell startCell = {0, 0}; // assume starting point has corrdinates (row = 0, col = 0)
+    push(startCell);
+
+    return true;
+}
+
+
+
 
 
 // TODO: Different handling when mouse is ready. isDestination() should be used.
-bool MazeTraversal::traverse(int startRow, int startCol, int endRow, int endCol)
+bool MazeTraversal::logicTraverse(int startRow, int startCol, int endRow, int endCol)
 {
     
     // clear visited array and stack
@@ -118,6 +137,76 @@ bool MazeTraversal::traverse(int startRow, int startCol, int endRow, int endCol)
     Cell endCell = {endRow, endCol};
 
     return dfs(startCell, endCell);
+}
+
+
+bool MazeTraversal::traverse(int path_right, int path_left, int path_forward, int path_back){
+
+    // Initialize variables
+    int currentRow;
+    int currentCol;
+    int order = 1;
+    unsigned long initial_time;
+
+    if (top > 0){
+        initial_time = micros();
+        // Serial.println("Starting loop: ");
+        // Serial.print("    I am at: ");
+        // printCell(stack[top-1]);
+
+        // Pop the top cell from the stack and mark it as visited
+        currentRow = stack[top-1].row;
+        currentCol = stack[top-1].col;
+        pop();
+        visited[currentRow][currentCol] = true;
+        numVisited[currentRow][currentCol] = order;
+        order++;
+
+        // printVisited();
+
+        // Check if we have reached the end of the maze
+        if (isDestination()) {
+            Serial.println("Success!");
+            printNumVisited();
+            printMaze();
+            return true;
+            // Maze is solved, exit loop
+            break;
+        }
+
+        /*############ Check adjacent cells and add unvisited ones to the stack ############*/ 
+        // Check cell to the top
+        if (currentRow > 0 && !visited[currentRow-1][currentCol] && path_forward) {
+            push({currentRow-1, currentCol});
+            // Serial.print("  Added top: ");
+            // printCell(stack[top-1]);
+        }
+
+        // Check cell to the right
+        if (currentCol < numCols-1 && !visited[currentRow][currentCol+1] && path_right) {
+            push({currentRow, currentCol+1});
+            // Serial.print("    Added right: ");
+            // printCell(stack[top-1]);
+        }
+
+        // Check cell to the bottom
+        if (currentRow < numRows-1 && !visited[currentRow+1][currentCol] && path_back) {
+            push({currentRow+1, currentCol});
+            // Serial.print("    Added bottom: ");
+            // printCell(stack[top-1]);
+        }
+        // Check cell to the left
+        if (currentCol > 0 && !visited[currentRow][currentCol-1] && path_left) {
+            // Add cell to the left
+            push({currentRow, currentCol-1});
+            // Serial.print("    Added left: ");
+            // printCell(stack[top-1]);
+        }
+
+        Serial.println(micros() - initial_time);        
+
+    }
+
 }
 
 
@@ -241,10 +330,10 @@ bool MazeTraversal::isVisited(Cell cell)
 }
 
 // TODO: Different handling when mouse is ready. End cell is not known. Need sensor data.
-bool MazeTraversal::isDestination(Cell cell)
+bool MazeTraversal::isDestination()
 {
     // cell.row == endRow && cell.col == endCol;
-    return true;
+    return false;
 }
 
 
