@@ -5,6 +5,7 @@
 #include "curve_fitting.h"
 #include "MotorCommand.h"
 #include <Arduino.h>
+#include <Wire.h>
 
 
 

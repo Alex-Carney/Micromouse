@@ -1,5 +1,3 @@
-
-
 #ifndef __NAXISMOTION_H__
 #define __NAXISMOTION_H__
 

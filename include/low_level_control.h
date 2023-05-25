@@ -8,6 +8,7 @@
 #define LOW_LEVEL_CONTROL_H
 
 #include <Arduino.h>
+#include <Wire.h>
 #include "ArduinoMotorShieldR3.h"
 #include "CircularBuffer.h"
 #include "MotorCommand.h"

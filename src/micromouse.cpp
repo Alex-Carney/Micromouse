@@ -8,6 +8,7 @@
 #include "NAxisMotion.h"
 #include "PositionSensor.h"
 #include <Arduino.h>
+#include <Wire.h>
 
 /****************************************************/
 /*
@@ -225,6 +226,7 @@ void setup()
     md.init();
 
     //Sensor Initialization
+    I2C.begin();
     mySensor.initSensor(0x28);          //The I2C Address can be changed here inside this function in the library
     mySensor.setOperationMode(OPERATION_MODE_NDOF);   //Can be configured to other operation modes as desired
     mySensor.setUpdateMode(MANUAL);	//The default is AUTO. Changing to manual requires calling the relevant update functions prior to calling the read functions
@@ -234,10 +236,13 @@ void setup()
 #ifdef DEBUG_MODE
 #if DEBUG_MODE == 1
     Serial.begin(115200);               // Initialize the Serial Port to view information on the Serial Monitor
-    I2C.begin();
+    
 
     mySensor.updateAccelConfig();
+    mySensor.updateCalibStatus();
+    Serial.println(mySensor.readSystemCalibStatus());
 
+    Serial.print("Range: ");
     Serial.println(mySensor.readAccelRange());
     Serial.print("Bandwidth: ");
     Serial.println(mySensor.readAccelBandwidth());
@@ -266,15 +271,9 @@ void loop()
         // Initialization
         MACHINE_STATE = MachineState::DRIVING;
         isFirstStateIteration = true;
-
-        while(true){
-            mySensor.updateEuler();
-            Serial.println(mySensor.readEulerHeading());
-        }
-
-
-
         break;
+
+
     case MachineState::DRIVING:
         if (isFirstStateIteration)
         {
