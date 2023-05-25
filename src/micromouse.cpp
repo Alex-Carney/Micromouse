@@ -48,6 +48,7 @@ long newTime = 0;
 long oldTime = 0;
 long lastSampleTime = 0;
 double WHEEL_CIRCUMFERENCE = 22; // cm
+double NORTH, SOUTH, EAST, WEST, curr_Heading; //Degrees for the 4 directions of the Maze
 
 // Position Sensors
 float sensor1_coefficients[] = {2.2e4, -1.227};
@@ -231,7 +232,7 @@ void setup()
     mySensor.setOperationMode(OPERATION_MODE_NDOF);   //Can be configured to other operation modes as desired
     mySensor.setUpdateMode(MANUAL);	//The default is AUTO. Changing to manual requires calling the relevant update functions prior to calling the read functions
   
-
+    
 // Peripheral Initialization
 #ifdef DEBUG_MODE
 #if DEBUG_MODE == 1
@@ -271,6 +272,14 @@ void loop()
         // Initialization
         MACHINE_STATE = MachineState::DRIVING;
         isFirstStateIteration = true;
+
+        //Initialize Set Directions
+        mySensor.updateEuler();
+        NORTH = mySensor.readEulerHeading();
+        SOUTH = NORTH + 180;
+        EAST = NORTH + 90;
+        WEST = NORTH + 270;
+        curr_Heading = NORTH;
         break;
 
 
@@ -288,6 +297,29 @@ void loop()
             // Stop wheels just in case
             md.setM1Speed(0);
             md.setM2Speed(0);
+
+
+            //DEBUGGING TURNING WITH HEADING AND DRIVING WITH HEADING.
+            // double old_val = 0;
+            // double new_val =0;
+            // bool BREACH = 0;
+            // while(true){
+            //     mySensor.updateEuler();
+                
+            //     new_val = mySensor.readEulerHeading()*M_PI/180;
+            //     curr_Heading = ll_control::unwrap_Heading(old_val , new_val); //0-360
+                
+            //     BREACH = (curr_Heading + (M_PI/2) > 2*M_PI) ||(curr_Heading - (M_PI/2) < 0);
+
+            //     if(BREACH){
+
+            //     }else{
+
+            //     }
+            //     Serial.println(ll_control::unwrap_Heading_Turn(curr_Heading,curr_Heading-(M_PI/2))); //ex: want 300+90 = 30;
+            //     old_val = new_val;
+
+            // }
 
             // State transition logic: Record distances right, left forward.
             traversal::pre_distance_right = sensor_mini_right.readDistanceCM();
@@ -509,15 +541,18 @@ void loop()
         break;
     case MachineState::TURNING:
         // Initialization
-        Serial.println("I AM TURNING WOOO");
-
         if (isFirstStateIteration)
         {
             //Sensor Initialization
-            // mySensor.initSensor(0x28);          //The I2C Address can be changed here inside this function in the library
-            // mySensor.setOperationMode(OPERATION_MODE_NDOF);   //Can be configured to other operation modes as desired
-            // mySensor.setUpdateMode(MANUAL);	//The default is AUTO. Changing to manual requires calling the relevant update functions prior to calling the read functions
- 
+            I2C.begin();
+            mySensor.resetSensor(0x06);
+            mySensor.initSensor(0x28);          //The I2C Address can be changed here inside this function in the library
+            mySensor.setOperationMode(OPERATION_MODE_NDOF);   //Can be configured to other operation modes as desired
+            mySensor.setUpdateMode(MANUAL);	//The default is AUTO. Changing to manual requires calling the relevant update functions prior to calling the read functions
+
+            
+            
+
             oldTime = micros();
             turn_control::start_time = oldTime;
             lastSampleTime = oldTime;
@@ -535,17 +570,17 @@ void loop()
                     Serial.println("FORWARD");
                     break;
                 case turn_control::TurnCommand::RIGHT:
-                    turn_control::y_star = {0,M_PI/2};
+                    turn_control::y_star = {0,M_PI/2 - 0.1};
                     Serial.println("RIGHT");
                     break;
                 case turn_control::TurnCommand::LEFT:
-                    turn_control::y_star = {0,-M_PI/2};
+                    turn_control::y_star = {0,-M_PI/2 + 0.1};
                     Serial.println("LEFT");
                     break;
                 case turn_control::TurnCommand::BACKWARD:
                     //NEED TO DO NESTED LEFT TURNS!!!!
                     //ALEX-GO HERE
-                    turn_control::y_star = {0,-M_PI/2};
+                    turn_control::y_star = {0,-M_PI/2 - 0.1};
                     Serial.println("BAKWARD");
                     break;
 
@@ -558,10 +593,22 @@ void loop()
             isFirstStateIteration = false;
         }
 
-        if(newTime - turn_control::start_time >= 10000000){
+        if(newTime - turn_control::start_time >= 3000000){
             isFirstStateIteration = true;
-            MACHINE_STATE = MachineState::DRIVING;
-            break;
+            bool double_turn = false;
+            //ALEX TAKE A LOOK AT THIS (TRYING TO SAY)
+            //If turn command was backward, set machine state back to turning and set turn command to left
+            switch(turn_control::turn_direction) {
+                case turn_control::TurnCommand::BACKWARD:
+                    MACHINE_STATE = MachineState::TURNING;
+                    turn_control::turn_direction = turn_control::TurnCommand::LEFT;
+                    double_turn = true;
+                    break;
+            }
+            if(!double_turn){
+                MACHINE_STATE = MachineState::DRIVING;
+                break;
+            }
         }
 
         newTime = micros();

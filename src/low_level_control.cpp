@@ -20,6 +20,7 @@ double getU(double V);
 double getUForPos(double V);
 double getU_R(double R);
 float unwrap_Heading(float previous_angle, float new_angle);
+float unwrap_Heading_turn(float previous_angle, float new_angle);
 
 namespace ll_control
 {
@@ -202,6 +203,7 @@ namespace ll_control
 
     return command;
   }
+
 }
 
 // Get PWM from Voltage control effort (DRIVING CONTROL)
@@ -354,11 +356,47 @@ double getU_R(double R)
   return res;
 }
 
+
 float unwrap_Heading(float previous_angle, float new_angle)
 {
   // Compute difference between new and previous angle
-  float d = new_angle - previous_angle;
-  d = d > M_PI ? d - 2 * M_PI : (d < -M_PI ? d + 2 * M_PI : d);
-  return previous_angle + d;
+  float angle_difference = new_angle - previous_angle;
+
+  // Adjust the difference to handle the boundary discontinuity
+  if (angle_difference > M_PI) {
+    // If difference is greater than π, subtract 2π to maintain continuity
+    angle_difference -= 2 * M_PI;
+  } else if (angle_difference < -M_PI) {
+    // If difference is less than -π, add 2π to maintain continuity
+    angle_difference += 2 * M_PI;
+  }
+
+  // Add adjusted difference to previous angle and return
+  return previous_angle + angle_difference;
 
 }
+
+float unwrap_Heading_Turn(float previous_angle, float new_angle)
+{
+  // Compute difference between new and previous angle
+  float resolved;
+
+  // Adjust the difference to handle the boundary discontinuity
+  if (new_angle > 2*M_PI) {
+    // If difference is greater than 2π, subtract 2π to maintain continuity
+    resolved = new_angle - 2 * M_PI;
+  } else if (new_angle < 0) {
+    // If difference is less than -2π, add 2π to maintain continuity
+    resolved = new_angle + 2 * M_PI;
+  } else{
+    resolved = new_angle;
+  }
+
+  // Add adjusted difference to previous angle and return
+  return resolved;
+
+}
+  
+
+
+
