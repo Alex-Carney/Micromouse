@@ -117,6 +117,7 @@ namespace drive_control
         const int SAMPLING_PERIOD = 40000; // Sampling period in microseconds
         const double MAX_SPEED_RADS = 3;   // Maximum speed in radians per second
     #endif
+    const int MAX_SPEED_AFTER_WALL_COMPENSATION = MAX_SPEED_RADS + 1;
     // Globals
     long motor1_pos;
     long motor2_pos;
@@ -132,7 +133,7 @@ namespace drive_control
     const double DEL_X_GAIN = 0.05;
 
     // when to turn on wall following
-    const long WALL_FOLLOW_TIME = 2200000; // 2.1 seconds
+    const long WALL_FOLLOW_TIME = 1500000; // 1.5 seconds
     long time_started_driving = 0;
     bool control_based_on_wall = false;
 }
@@ -407,8 +408,8 @@ void loop()
 #if WALL_FOLLOW == 1
             if (drive_control::control_based_on_wall == true)
             {
-                drive_control::motor1_reference_speed = min(drive_control::MAX_SPEED_RADS + delWRef, 4.0);
-                drive_control::motor2_reference_speed = min(drive_control::MAX_SPEED_RADS - delWRef, 4.0);
+                drive_control::motor1_reference_speed = min(drive_control::MAX_SPEED_RADS + delWRef, drive_control::MAX_SPEED_AFTER_WALL_COMPENSATION);
+                drive_control::motor2_reference_speed = min(drive_control::MAX_SPEED_RADS - delWRef, drive_control::MAX_SPEED_AFTER_WALL_COMPENSATION);
             }
             else
             {
@@ -463,9 +464,9 @@ void loop()
 
             isFirstStateIteration = false;
 
-            md.setM1Speed(0);
-            md.setM2Speed(0);
-            delay(200);
+            // md.setM1Speed(0);
+            // md.setM2Speed(0);
+            // delay(200);
 
             double curr_pos_from_wall = sensor_big_circle.readDistanceCM();
             double pos_to_move_rad = ((curr_pos_from_wall - traversal::DESIRED_WALL_DIST) * 2 * M_PI) / WHEEL_CIRCUMFERENCE;
