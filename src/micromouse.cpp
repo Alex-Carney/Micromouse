@@ -9,6 +9,7 @@
 #include "PositionSensor.h"
 #include <Arduino.h>
 #include <Wire.h>
+#include "macros.h"
 
 /****************************************************/
 /*
@@ -19,12 +20,13 @@ Authors: Alex Carney, Majd Hamdan, Youssef Marzouk, Nick Hagler
 /****************************************************/
 
 // Macros
-// Set DEBUG_MODE to 1 to enable debugging
-#define DEBUG_MODE 1
 #define WALL_FOLLOW 1
 
 // Set Turning Control Gains
 #define FAST_TURN 0
+
+// Set Speed Mode
+#define ZOOM 1
 
 // Define a macro for Pi
 #define M_PI 3.14159265358979323846
@@ -108,9 +110,13 @@ namespace pos_control
 namespace drive_control
 {
     // Constants
-    const int SAMPLING_PERIOD = 40000; // Sampling period in microseconds
-    const double MAX_SPEED_RADS = 3;   // Maximum speed in radians per second
-
+    #if SPEED_MODE == 1
+        const int SAMPLING_PERIOD = 20000; // Sampling period in microseconds
+        const double MAX_SPEED_RADS = 7;   // Maximum speed in radians per second
+    #else 
+        const int SAMPLING_PERIOD = 40000; // Sampling period in microseconds
+        const double MAX_SPEED_RADS = 3;   // Maximum speed in radians per second
+    #endif
     // Globals
     long motor1_pos;
     long motor2_pos;

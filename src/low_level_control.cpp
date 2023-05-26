@@ -6,11 +6,13 @@
 #include "MotorCommand.h"
 #include <Arduino.h>
 #include <Wire.h>
+#include "macros.h"
 
 
 
 // Set DEBUG_MODE to 1 to enable debugging
 #define DEBUG_MODE 0
+
 
 // Define a macro for PI
 #define M_PI 3.14159265358979323846
@@ -31,19 +33,23 @@ namespace ll_control
   // Compensator Constants for Driving
   namespace speed_compensation
   {
-    const double a = 2;      // coefficient for u[k-1]
-    const double b = -1;     // coefficient for u[k-2]
-    const double c = 2.131;  // coefficient for e[k]
-    const double d = -2.908; // coefficient for e[k-1]
-    const double e = 0.9612; // coefficient for e[k-2]
+
 
 
     //CONSTANSTS FOR FAST SPEED
-    // const double a = 2; //coefficient for u[k-1]
-    // const double b = -1;  //coefficient for u[k-2]
-    // const double c = 1.473; //coefficient for e[k]
-    // const double d = -2.592; //coefficient for e[k-1]
-    // const double e = 1.135; //coefficient for e[k-2]
+    #if SPEED_MODE == 1
+      const double a = 2; //coefficient for u[k-1]
+      const double b = -1;  //coefficient for u[k-2]
+      const double c = 1.473; //coefficient for e[k]
+      const double d = -2.592; //coefficient for e[k-1]
+      const double e = 1.135; //coefficient for e[k-2]
+    #else
+      const double a = 2;      // coefficient for u[k-1]
+      const double b = -1;     // coefficient for u[k-2]
+      const double c = 2.131;  // coefficient for e[k]
+      const double d = -2.908; // coefficient for e[k-1]
+      const double e = 0.9612; // coefficient for e[k-2]
+    #endif
   }
 
   // Compensator Constants for Turning
