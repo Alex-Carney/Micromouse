@@ -605,6 +605,11 @@ void loop()
             isFirstStateIteration = true;
             bool double_turn = false;
 
+            //Reset state-space vectors
+            turn_control::xk = {0,curr_Heading};
+            turn_control::yk = turn_control::xk;
+            turn_control::zk = {0,0};
+
             //RESET DIRECTIONS
             NORTH = mySensor.readEulerHeading();
             SOUTH = NORTH + 180;
