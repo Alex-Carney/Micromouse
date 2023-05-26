@@ -16,6 +16,9 @@
 
 namespace ll_control
 {
+    float unwrap_Heading(float previous_angle, float new_angle);
+    float unwrap_Heading_Turn(float previous_angle, float new_angle);
+
     /**
      * @brief Sets the motor speeds to the given value
      *

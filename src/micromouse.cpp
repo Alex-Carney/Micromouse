@@ -164,6 +164,7 @@ namespace turn_control
     long encoder3Val_start_m2;
     long encoder3Val_start_m1;
     double turn_start;
+    bool KILL_TURN = false;
     
 
     //Target Vector
@@ -279,7 +280,7 @@ void loop()
         SOUTH = NORTH + 180;
         EAST = NORTH + 90;
         WEST = NORTH + 270;
-        curr_Heading = NORTH;
+        curr_Heading = NORTH*M_PI/180;
         break;
 
 
@@ -300,26 +301,32 @@ void loop()
 
 
             //DEBUGGING TURNING WITH HEADING AND DRIVING WITH HEADING.
-            // double old_val = 0;
-            // double new_val =0;
-            // bool BREACH = 0;
-            // while(true){
-            //     mySensor.updateEuler();
+            float old_val = 0;
+            float new_val =0;
+            bool BREACH = 0;
+            while(true){
+                mySensor.updateEuler();
                 
-            //     new_val = mySensor.readEulerHeading()*M_PI/180;
-            //     curr_Heading = ll_control::unwrap_Heading(old_val , new_val); //0-360
+                new_val = mySensor.readEulerHeading()*M_PI/180;
+                curr_Heading = ll_control::unwrap_Heading(old_val , new_val); //0-360
                 
-            //     BREACH = (curr_Heading + (M_PI/2) > 2*M_PI) ||(curr_Heading - (M_PI/2) < 0);
+                BREACH = (curr_Heading + (M_PI/2) > 2*M_PI) ||(curr_Heading - (M_PI/2) < 0);
 
-            //     if(BREACH){
+                // if(BREACH){
 
-            //     }else{
+                // }else{
 
-            //     }
-            //     Serial.println(ll_control::unwrap_Heading_Turn(curr_Heading,curr_Heading-(M_PI/2))); //ex: want 300+90 = 30;
-            //     old_val = new_val;
+                // }
+                // Serial.println(ll_control::unwrap_Heading_Turn(curr_Heading,curr_Heading-(M_PI/2))); //ex: want 300+90 = 30;
+                Serial.print("curr_Heading: ");
+                Serial.println(curr_Heading); 
+                Serial.print("Euler Heading: ");
+                Serial.println(mySensor.readEulerHeading()*M_PI/180);
+                delay(400);
+                old_val = curr_Heading;
+                
 
-            // }
+            }
 
             // State transition logic: Record distances right, left forward.
             traversal::pre_distance_right = sensor_mini_right.readDistanceCM();
@@ -550,7 +557,8 @@ void loop()
             mySensor.setOperationMode(OPERATION_MODE_NDOF);   //Can be configured to other operation modes as desired
             mySensor.setUpdateMode(MANUAL);	//The default is AUTO. Changing to manual requires calling the relevant update functions prior to calling the read functions
 
-            
+            //set kill order to false
+            turn_control::KILL_TURN = false;
             
 
             oldTime = micros();
@@ -570,17 +578,17 @@ void loop()
                     Serial.println("FORWARD");
                     break;
                 case turn_control::TurnCommand::RIGHT:
-                    turn_control::y_star = {0,M_PI/2 - 0.1};
+                    turn_control::y_star = {0,curr_Heading + M_PI/2};
                     Serial.println("RIGHT");
                     break;
                 case turn_control::TurnCommand::LEFT:
-                    turn_control::y_star = {0,-M_PI/2 + 0.1};
+                    turn_control::y_star = {0,curr_Heading-M_PI/2};
                     Serial.println("LEFT");
                     break;
                 case turn_control::TurnCommand::BACKWARD:
                     //NEED TO DO NESTED LEFT TURNS!!!!
                     //ALEX-GO HERE
-                    turn_control::y_star = {0,-M_PI/2 - 0.1};
+                    turn_control::y_star = {0,curr_Heading+M_PI};
                     Serial.println("BAKWARD");
                     break;
 
@@ -593,22 +601,30 @@ void loop()
             isFirstStateIteration = false;
         }
 
-        if(newTime - turn_control::start_time >= 3000000){
+        if((newTime - turn_control::start_time >= 3000000) || (turn_control::KILL_TURN)){
             isFirstStateIteration = true;
             bool double_turn = false;
+
+            //RESET DIRECTIONS
+            NORTH = mySensor.readEulerHeading();
+            SOUTH = NORTH + 180;
+            EAST = NORTH + 90;
+            WEST = NORTH + 270;
+            curr_Heading = NORTH*M_PI/180;
+
             //ALEX TAKE A LOOK AT THIS (TRYING TO SAY)
             //If turn command was backward, set machine state back to turning and set turn command to left
-            switch(turn_control::turn_direction) {
-                case turn_control::TurnCommand::BACKWARD:
-                    MACHINE_STATE = MachineState::TURNING;
-                    turn_control::turn_direction = turn_control::TurnCommand::LEFT;
-                    double_turn = true;
-                    break;
-            }
-            if(!double_turn){
+            // switch(turn_control::turn_direction) {
+            //     case turn_control::TurnCommand::BACKWARD:
+            //         MACHINE_STATE = MachineState::TURNING;
+            //         turn_control::turn_direction = turn_control::TurnCommand::LEFT;
+            //         double_turn = true;
+            //         break;
+            // }
+            // if(!double_turn){
                 MACHINE_STATE = MachineState::DRIVING;
                 break;
-            }
+            //}
         }
 
         newTime = micros();
@@ -662,16 +678,25 @@ void loop()
                 turn_control::u
             );
 
-            
-            Serial.print("yk: {");
-            Serial.print(turn_control::yk(0,0));
-            Serial.print(" , ");
-            Serial.print(turn_control::yk(0,1));
-            Serial.println();
+            //Check if we reached the right orientation then abort
+            if((turn_control::yk(0,1) >= turn_control::y_star(0,1) - 0.01) && (turn_control::yk(0,1) <= turn_control::y_star(0,1) + 0.01)){
+                turn_control::KILL_TURN = true;
+                md.setM1Speed(0);
+                md.setM2Speed(0);
 
-            // Apply control to motors
-            md.setM1Speed((int)command.motor1_pwm);
-            md.setM2Speed((int)command.motor2_pwm);
+            }else{//Else apply normal control effort
+                // Apply control to motors
+                md.setM1Speed((int)command.motor1_pwm);
+                md.setM2Speed((int)command.motor2_pwm);
+            }
+            
+            // Serial.print("yk: {");
+            // Serial.print(turn_control::yk(0,0));
+            // Serial.print(" , ");
+            // Serial.print(turn_control::yk(0,1));
+            // Serial.println();
+
+            
 
             //Update Data
             oldTime = newTime;
