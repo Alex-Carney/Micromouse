@@ -24,7 +24,7 @@ Authors: Alex Carney, Majd Hamdan, Youssef Marzouk, Nick Hagler
 #define WALL_FOLLOW 1
 
 // Set Turning Control Gains
-#define FAST_TURN 1
+#define FAST_TURN 0
 
 // Define a macro for Pi
 #define M_PI 3.14159265358979323846
@@ -141,15 +141,18 @@ namespace turn_control
     const BLA::Matrix<2, 2> C = {1, 0, 0, 1};                                                  // C Matrix (Identity) measuring all states
 
 // choose which F matrix to use for turning.
+//        -57.3453085546904, -15.2453582250787, 1.12355118451498, 0.9721973845281, -57.5637281185996, 17.8912645110515, 1.1418253266365, -1.19356797352185 
+
 #if FAST_TURN == 1
 #define F_BAR                                                                                                                                              \
     {                                                                                                                                                      \
         -64.7412773115279, -17.5858202697336, 1.42970596701333, 1.26112940780672, -64.9208296716241, 19.7608942866482, 1.44647260526361, -1.46423829030544 \
     }
 #else
+
 #define F_BAR                                                                                                                                            \
-    {                                                                                                                                                    \
-        -57.3453085546904, -15.2453582250787, 1.12355118451498, 0.9721973845281, -57.5637281185996, 17.8912645110515, 1.1418253266365, -1.19356797352185 \
+    {                                                                                                                                                    \ 
+        -50.3454789302405,-13.9488442765285,0.869813457437172,0.796116413363104,-50.4359171889747,15.044401620436,0.876502603298697,-0.877147859293039                                                                                                                          \
     }
 #endif
 
@@ -301,32 +304,32 @@ void loop()
 
 
             //DEBUGGING TURNING WITH HEADING AND DRIVING WITH HEADING.
-            float old_val = 0;
-            float new_val =0;
-            bool BREACH = 0;
-            while(true){
-                mySensor.updateEuler();
+            // float old_val = 0;
+            // float new_val =0;
+            // bool BREACH = 0;
+            // while(true){
+            //     mySensor.updateEuler();
                 
-                new_val = mySensor.readEulerHeading()*M_PI/180;
-                curr_Heading = ll_control::unwrap_Heading(old_val , new_val); //0-360
+            //     new_val = mySensor.readEulerHeading()*M_PI/180;
+            //     curr_Heading = ll_control::unwrap_Heading(old_val , new_val); //0-360
                 
-                BREACH = (curr_Heading + (M_PI/2) > 2*M_PI) ||(curr_Heading - (M_PI/2) < 0);
+            //     BREACH = (curr_Heading + (M_PI/2) > 2*M_PI) ||(curr_Heading - (M_PI/2) < 0);
 
-                // if(BREACH){
+            //     // if(BREACH){
 
-                // }else{
+            //     // }else{
 
-                // }
-                // Serial.println(ll_control::unwrap_Heading_Turn(curr_Heading,curr_Heading-(M_PI/2))); //ex: want 300+90 = 30;
-                Serial.print("curr_Heading: ");
-                Serial.println(curr_Heading); 
-                Serial.print("Euler Heading: ");
-                Serial.println(mySensor.readEulerHeading()*M_PI/180);
-                delay(400);
-                old_val = curr_Heading;
+            //     // }
+            //     // Serial.println(ll_control::unwrap_Heading_Turn(curr_Heading,curr_Heading-(M_PI/2))); //ex: want 300+90 = 30;
+            //     Serial.print("curr_Heading: ");
+            //     Serial.println(curr_Heading); 
+            //     Serial.print("Euler Heading: ");
+            //     Serial.println(mySensor.readEulerHeading()*M_PI/180);
+            //     delay(400);
+            //     old_val = curr_Heading;
                 
 
-            }
+            // }
 
             // State transition logic: Record distances right, left forward.
             traversal::pre_distance_right = sensor_mini_right.readDistanceCM();
@@ -551,11 +554,11 @@ void loop()
         if (isFirstStateIteration)
         {
             //Sensor Initialization
-            I2C.begin();
-            mySensor.resetSensor(0x06);
-            mySensor.initSensor(0x28);          //The I2C Address can be changed here inside this function in the library
-            mySensor.setOperationMode(OPERATION_MODE_NDOF);   //Can be configured to other operation modes as desired
-            mySensor.setUpdateMode(MANUAL);	//The default is AUTO. Changing to manual requires calling the relevant update functions prior to calling the read functions
+            // I2C.begin();
+            // mySensor.resetSensor(0x06);
+            // mySensor.initSensor(0x28);          //The I2C Address can be changed here inside this function in the library
+            // mySensor.setOperationMode(OPERATION_MODE_NDOF);   //Can be configured to other operation modes as desired
+            // mySensor.setUpdateMode(MANUAL);	//The default is AUTO. Changing to manual requires calling the relevant update functions prior to calling the read functions
 
             //set kill order to false
             turn_control::KILL_TURN = false;
@@ -569,7 +572,7 @@ void loop()
             turn_control::encoder3Val_start_m2 = encoder::getEncoderValue(ENCODER_M2);
 
             //Find Current Heading and set to start
-            turn_control::turn_start = mySensor.readEulerHeading()*M_PI/180;
+            turn_control::turn_start = curr_Heading;
 
             switch(turn_control::turn_direction) {
                 case turn_control::TurnCommand::FORWARD:
@@ -592,6 +595,17 @@ void loop()
                     Serial.println("BAKWARD");
                     break;
 
+                
+
+            }
+
+            if(turn_control::turn_direction == turn_control::TurnCommand::LEFT) {
+            }
+                if(turn_control::turn_direction == turn_control::TurnCommand::RIGHT) {
+            }
+                if(turn_control::turn_direction == turn_control::TurnCommand::FORWARD) {
+            }
+                if(turn_control::turn_direction == turn_control::TurnCommand::BACKWARD) {
             }
 
             // Stop wheels just in case
@@ -599,6 +613,15 @@ void loop()
             md.setM2Speed(0);
 
             isFirstStateIteration = false;
+
+            Serial.print("y_star: ");
+            Serial.println(turn_control::y_star(0,1));
+
+            Serial.print("Heading: ");
+            Serial.println(curr_Heading);
+
+            Serial.print("turn_start: ");
+            Serial.println(turn_control::turn_start);
         }
 
         if((newTime - turn_control::start_time >= 3000000) || (turn_control::KILL_TURN)){
@@ -611,7 +634,7 @@ void loop()
             turn_control::zk = {0,0};
 
             //RESET DIRECTIONS
-            NORTH = mySensor.readEulerHeading();
+            NORTH = ll_control::unwrap_Heading(NORTH*M_PI/180, mySensor.readEulerHeading()*M_PI/180)*180/M_PI;
             SOUTH = NORTH + 180;
             EAST = NORTH + 90;
             WEST = NORTH + 270;
@@ -639,25 +662,13 @@ void loop()
             turn_control::motor1_pos = encoder::getEncoderValue(ENCODER_M1);
             turn_control::motor2_pos = encoder::getEncoderValue(ENCODER_M2);
             
-            Serial.println("here with ");
-            if(turn_control::turn_direction == turn_control::TurnCommand::LEFT) {
-                Serial.println("bruh");
-            }
-                        if(turn_control::turn_direction == turn_control::TurnCommand::RIGHT) {
-                Serial.println("bruh2");
-            }
-                        if(turn_control::turn_direction == turn_control::TurnCommand::FORWARD) {
-                Serial.println("bruh3");
-            }
-                        if(turn_control::turn_direction == turn_control::TurnCommand::BACKWARD) {
-                Serial.println("bruh4");
-            }
+            
             mySensor.updateEuler();
             mySensor.updateGyro();
 
             lastSampleTime = newTime;
 
-            double heading_meas = (mySensor.readEulerHeading() * M_PI / 180) - turn_control::turn_start;
+            double heading_meas = (mySensor.readEulerHeading() * M_PI / 180);
 
             
             MotorCommand command = ll_control::compensateTurning(
@@ -684,7 +695,7 @@ void loop()
             );
 
             //Check if we reached the right orientation then abort
-            if((turn_control::yk(0,1) >= turn_control::y_star(0,1) - 0.01) && (turn_control::yk(0,1) <= turn_control::y_star(0,1) + 0.01)){
+            if((turn_control::yk(0,1) >= turn_control::y_star(0,1) - 0.04) && (turn_control::yk(0,1) <= turn_control::y_star(0,1) + 0.04)){
                 turn_control::KILL_TURN = true;
                 md.setM1Speed(0);
                 md.setM2Speed(0);
