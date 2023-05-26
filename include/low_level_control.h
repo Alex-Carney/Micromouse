@@ -16,8 +16,17 @@
 
 namespace ll_control
 {
+    /**
+     * @brief Resolves discontinuities in heading function measurements [rad]
+     * 
+     * @author Youssef Marzouk
+     * 
+     * @param previous_angle Previous Angle Measurement [rad]
+     * @param new_angle New Angle Measurement [rad]
+     * 
+     * @return float (resolved heading value [rad])
+     */
     float unwrap_Heading(float previous_angle, float new_angle);
-    float unwrap_Heading_Turn(float previous_angle, float new_angle);
 
     /**
      * @brief Sets the motor speeds to the given value

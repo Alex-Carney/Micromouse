@@ -20,7 +20,6 @@ double getU(double V);
 double getUForPos(double V);
 double getU_R(double R);
 float unwrap_Heading(float previous_angle, float new_angle);
-float unwrap_Heading_turn(float previous_angle, float new_angle);
 
 namespace ll_control
 {
@@ -37,6 +36,14 @@ namespace ll_control
     const double c = 2.131;  // coefficient for e[k]
     const double d = -2.908; // coefficient for e[k-1]
     const double e = 0.9612; // coefficient for e[k-2]
+
+
+    //CONSTANSTS FOR FAST SPEED
+    // const double a = 2; //coefficient for u[k-1]
+    // const double b = -1;  //coefficient for u[k-2]
+    // const double c = 1.473; //coefficient for e[k]
+    // const double d = -2.592; //coefficient for e[k-1]
+    // const double e = 1.135; //coefficient for e[k-2]
   }
 
   // Compensator Constants for Turning
@@ -209,27 +216,6 @@ namespace ll_control
     float d = new_angle - previous_angle;
     d = d > M_PI ? d - 2 * M_PI : (d < -M_PI ? d + 2 * M_PI : d);
     return previous_angle + d;
-
-  }
-
-  float unwrap_Heading_Turn(float previous_angle, float new_angle)
-  {
-    // Compute difference between new and previous angle
-    float resolved;
-
-    // Adjust the difference to handle the boundary discontinuity
-    if (new_angle > 2*M_PI) {
-      // If difference is greater than 2π, subtract 2π to maintain continuity
-      resolved = new_angle - 2 * M_PI;
-    } else if (new_angle < 0) {
-      // If difference is less than -2π, add 2π to maintain continuity
-      resolved = new_angle + 2 * M_PI;
-    } else{
-      resolved = new_angle;
-    }
-
-    // Add adjusted difference to previous angle and return
-    return resolved;
 
   }
 
