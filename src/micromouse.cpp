@@ -382,10 +382,12 @@ void loop()
 
             isFirstStateIteration = false;
 
-            // md.setM1Speed(0);
-            // md.setM2Speed(0);
-            // delay(200);
-
+// if state delay
+#if STATE_DELAY == 1
+            md.setM1Speed(0);
+            md.setM2Speed(0);
+            delay(200);
+#endif
             double curr_pos_from_wall = sensor_big_circle.readDistanceCM();
             double pos_to_move_rad = ((curr_pos_from_wall - traversal::DESIRED_WALL_DIST) * 2 * M_PI) / WHEEL_CIRCUMFERENCE;
 
@@ -429,16 +431,19 @@ void loop()
             if (command.next_state == true)
             {
                 Serial.print("Zero ESS");
-                md.setM1Speed(0);
-                md.setM2Speed(0);
+
                 MACHINE_STATE = MachineState::LOGIC;
                 isFirstStateIteration = true;
             }
         }
         break;
     case MachineState::LOGIC:
-        // Initialization
-        delay(100);
+// Initialization
+#if STATE_DELAY == 1
+        md.setM1Speed(0);
+        md.setM2Speed(0);
+        delay(200);
+#endif
         // Check what directions are valid
         traversal::path_left = sensor_mini_right.readDistanceCM() > traversal::VALID_PATH_THRESHOLD ? 1 : 0;
         traversal::path_right = sensor_marks.readDistanceCM() > traversal::VALID_PATH_THRESHOLD ? 1 : 0;
@@ -482,10 +487,12 @@ void loop()
 
             isFirstStateIteration = false;
 
-            // TODO: Should we remove this?
+// TODO: Should we remove this?
+#if STATE_DELAY == 1
             md.setM1Speed(0);
             md.setM2Speed(0);
             delay(200);
+#endif
         }
 
         newTime = micros();
