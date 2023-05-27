@@ -1,7 +1,6 @@
 #include <SPI.h>
 #include "ArduinoMotorShieldR3.h"
 #include "ArduinoMotorEncoder.h"
-#include "BasicLinearAlgebra.h"
 #include "CircularBuffer.h"
 #include "low_level_control.h"
 #include "MotorCommand.h"
@@ -50,8 +49,8 @@ bool isWall(float dist_front_cm);
 long newTime = 0;
 long oldTime = 0;
 long lastSampleTime = 0;
-double WHEEL_CIRCUMFERENCE = 22; // cm
-double NORTH, SOUTH, EAST, WEST, curr_Heading; //Degrees for the 4 directions of the Maze
+double WHEEL_CIRCUMFERENCE = 22;               // cm
+double NORTH, SOUTH, EAST, WEST, curr_Heading; // Degrees for the 4 directions of the Maze
 
 // Position Sensors
 float sensor1_coefficients[] = {2.2e4, -1.227};
@@ -123,14 +122,14 @@ namespace pos_control
 // Global variables for DRIVING
 namespace drive_control
 {
-    // Constants
-    #if SPEED_MODE == 1
-        const int SAMPLING_PERIOD = 20000; // Sampling period in microseconds
-        const double MAX_SPEED_RADS = 7;   // Maximum speed in radians per second
-    #else 
-        const int SAMPLING_PERIOD = 40000; // Sampling period in microseconds
-        const double MAX_SPEED_RADS = 3;   // Maximum speed in radians per second
-    #endif
+// Constants
+#if SPEED_MODE == 1
+    const int SAMPLING_PERIOD = 20000; // Sampling period in microseconds
+    const double MAX_SPEED_RADS = 7;   // Maximum speed in radians per second
+#else
+    const int SAMPLING_PERIOD = 40000; // Sampling period in microseconds
+    const double MAX_SPEED_RADS = 3;   // Maximum speed in radians per second
+#endif
     const int MAX_SPEED_AFTER_WALL_COMPENSATION = MAX_SPEED_RADS + 1;
     // Globals
     long motor1_pos;
@@ -153,73 +152,31 @@ namespace drive_control
 }
 
 // Global variables for TURNING
-namespace turn_control
+namespace turning
 {
     // Constants
-    const int SAMPLING_PERIOD = 20000;                                                         // Sampling Period in microseconds
-    const BLA::Matrix<2, 2> A = {1, 0, 0, 1};                                                  // A_bar Matrix for discrete State-Space System (Identity)
-    const BLA::Matrix<2, 2> B = {0.00035, 0.00035, 0.00423985463355542, -0.00423985463355542}; // B_bar Matrix for discrete State-Space System
-    const BLA::Matrix<2, 2> C = {1, 0, 0, 1};                                                  // C Matrix (Identity) measuring all states
-
-// choose which F matrix to use for turning.
-//        -57.3453085546904, -15.2453582250787, 1.12355118451498, 0.9721973845281, -57.5637281185996, 17.8912645110515, 1.1418253266365, -1.19356797352185 
-
-#if FAST_TURN == 1
-#define F_BAR                                                                                                                                              \
-    {                                                                                                                                                      \
-        -64.7412773115279, -17.5858202697336, 1.42970596701333, 1.26112940780672, -64.9208296716241, 19.7608942866482, 1.44647260526361, -1.46423829030544 \
-    }
-#else
-
-#define F_BAR                                                                                                                                            \
-    {                                                                                                                                                    \ 
-        -50.3454789302405,-13.9488442765285,0.869813457437172,0.796116413363104,-50.4359171889747,15.044401620436,0.876502603298697,-0.877147859293039                                                                                                                          \
-    }
-#endif
-
-    const BLA::Matrix<2, 4> F_bar = F_BAR; // assign the controller gain matrix F
+    const int SAMPLING_PERIOD = 10000; // Sampling period in microseconds
 
     // Globals
-    long motor1_pos;
-    long motor2_pos;
-    long start_time;
-    double motor1_reference_speed;
-    double motor2_reference_speed;
     long encoder3Val_start_m2;
     long encoder3Val_start_m1;
-    double turn_start;
-    bool KILL_TURN = false;
-    
-
-    //Target Vector
-    BLA::Matrix<2,1> y_star;
-
-    // state vectors
-    BLA::Matrix<2, 1> xk = {0, 0};  // x(k) vector
-    BLA::Matrix<2, 1> xkp = {0, 0}; // x(k+1) vector
-    
-    // controller vectors
-    BLA::Matrix<2, 1> zk = {0, 0};  // z(k) vector
-    BLA::Matrix<2, 1> zkp = {0, 0}; // z(k+1) vector
-
-    // Measurement vector
-    BLA::Matrix<2, 1> yk = {0, 0};
-
-    // controller
-    BLA::Matrix<2, 1> u = {0, 0};
-
-    // Full System Vector
-    BLA::Matrix<4, 1> wk = xk && zk; // Vertically concatenate xk and zk [xk;zk]
-
-    enum class TurnCommand
+    long enc_start_m1;
+    long enc_start_m2;
+    long motor1_pos;
+    long motor2_pos;
+    CircularBuffer<double> control_buffer_m1(2, 3); // 2 steps back. 3 values per step
+    CircularBuffer<double> control_buffer_m2(2, 3); // 2 steps back. 3 values per step
+    double SINGLE_WHEEL_POS_REFERENCE = 3.55;       // (rad) How much to turn one wheel for all turns
+    enum class TurnDirection
     {
-        FORWARD,
         LEFT,
         RIGHT,
-        BACKWARD
+        BACKWARD,
+        FORWARD
     };
-    TurnCommand turn_direction = TurnCommand::FORWARD;
-
+    TurnDirection turn_direction = TurnDirection::FORWARD;
+    double position_reference_left;
+    double position_reference_right;
 }
 
 // State machine definitions
@@ -251,21 +208,19 @@ void setup()
     // Motor Initialization
     md.init();
 
-    //Sensor Initialization
+    // Sensor Initialization
     I2C.begin();
-    mySensor.initSensor(0x28);          //The I2C Address can be changed here inside this function in the library
-    mySensor.setOperationMode(OPERATION_MODE_NDOF);   //Can be configured to other operation modes as desired
-    mySensor.setUpdateMode(MANUAL);	//The default is AUTO. Changing to manual requires calling the relevant update functions prior to calling the read functions
+    mySensor.initSensor(0x28);                      // The I2C Address can be changed here inside this function in the library
+    mySensor.setOperationMode(OPERATION_MODE_NDOF); // Can be configured to other operation modes as desired
+    mySensor.setUpdateMode(MANUAL);                 // The default is AUTO. Changing to manual requires calling the relevant update functions prior to calling the read functions
 
     // Traversal
     mazeTraversal.initilizeTraversal();
-  
-    
+
 // Peripheral Initialization
 #ifdef DEBUG_MODE
 #if DEBUG_MODE == 1
-    Serial.begin(115200);               // Initialize the Serial Port to view information on the Serial Monitor
-    
+    Serial.begin(115200); // Initialize the Serial Port to view information on the Serial Monitor
 
     mySensor.updateAccelConfig();
     mySensor.updateCalibStatus();
@@ -277,7 +232,7 @@ void setup()
     Serial.println(mySensor.readAccelBandwidth());
     Serial.print("Power Mode: ");
     Serial.println(mySensor.readAccelPowerMode());
-    
+
     Serial.println("%Streaming in..."); // Countdown
     Serial.print("%3...");
     delay(1000); // Wait for a second
@@ -292,7 +247,7 @@ void setup()
 void loop()
 {
     // Main loop
-    
+
     switch (MACHINE_STATE)
     {
     case MachineState::INITIALIZING:
@@ -301,15 +256,14 @@ void loop()
         MACHINE_STATE = MachineState::DRIVING;
         isFirstStateIteration = true;
 
-        //Initialize Set Directions
+        // Initialize Set Directions
         mySensor.updateEuler();
         NORTH = mySensor.readEulerHeading();
         SOUTH = NORTH + 180;
         EAST = NORTH + 90;
         WEST = NORTH + 270;
-        curr_Heading = NORTH*M_PI/180;
+        curr_Heading = NORTH * M_PI / 180;
         break;
-
 
     case MachineState::DRIVING:
         if (isFirstStateIteration)
@@ -325,35 +279,6 @@ void loop()
             // Stop wheels just in case
             md.setM1Speed(0);
             md.setM2Speed(0);
-
-
-            //DEBUGGING TURNING WITH HEADING AND DRIVING WITH HEADING.
-            // float old_val = 0;
-            // float new_val =0;
-            // bool BREACH = 0;
-            // while(true){
-            //     mySensor.updateEuler();
-                
-            //     new_val = mySensor.readEulerHeading()*M_PI/180;
-            //     curr_Heading = ll_control::unwrap_Heading(old_val , new_val); //0-360
-                
-            //     BREACH = (curr_Heading + (M_PI/2) > 2*M_PI) ||(curr_Heading - (M_PI/2) < 0);
-
-            //     // if(BREACH){
-
-            //     // }else{
-
-            //     // }
-            //     // Serial.println(ll_control::unwrap_Heading_Turn(curr_Heading,curr_Heading-(M_PI/2))); //ex: want 300+90 = 30;
-            //     Serial.print("curr_Heading: ");
-            //     Serial.println(curr_Heading); 
-            //     Serial.print("Euler Heading: ");
-            //     Serial.println(mySensor.readEulerHeading()*M_PI/180);
-            //     delay(400);
-            //     old_val = curr_Heading;
-                
-
-            // }
 
             // State transition logic: Record distances right, left forward.
             traversal::pre_distance_right = sensor_mini_right.readDistanceCM();
@@ -391,13 +316,6 @@ void loop()
 
             // Measure front distance for later
             float dist_front_cm = sensor_big_circle.readDistanceCM();
-            // Serial.println(dist_front_cm);
-            //  // Print distances to left and right wall minus threshold
-            //  Serial.print("Left: ");
-            //  Serial.println(dist_left_cm - traversal::pre_distance_left);
-            //  Serial.print("Right: ");
-            //  Serial.println(dist_right_cm - traversal::pre_distance_right);
-
             bool wall = isWall(dist_front_cm);
             bool intersection = isIntersection(dist_left_cm, dist_right_cm);
             // Update pre distances for next iteration
@@ -481,10 +399,12 @@ void loop()
 
             isFirstStateIteration = false;
 
-            // md.setM1Speed(0);
-            // md.setM2Speed(0);
-            // delay(200);
-
+// if state delay
+#if STATE_DELAY == 1
+            md.setM1Speed(0);
+            md.setM2Speed(0);
+            delay(200);
+#endif
             double curr_pos_from_wall = sensor_big_circle.readDistanceCM();
             double pos_to_move_rad = ((curr_pos_from_wall - traversal::DESIRED_WALL_DIST) * 2 * M_PI) / WHEEL_CIRCUMFERENCE;
 
@@ -528,16 +448,19 @@ void loop()
             if (command.next_state == true)
             {
                 Serial.print("Zero ESS");
-                md.setM1Speed(0);
-                md.setM2Speed(0);
+
                 MACHINE_STATE = MachineState::LOGIC;
                 isFirstStateIteration = true;
             }
         }
         break;
     case MachineState::LOGIC:
-        // Initialization
-        delay(100);
+// Initialization
+#if STATE_DELAY == 1
+        md.setM1Speed(0);
+        md.setM2Speed(0);
+        delay(200);
+#endif
         // Check what directions are valid
         traversal::path_left = sensor_mini_right.readDistanceCM() > traversal::VALID_PATH_THRESHOLD ? 1 : 0;
         traversal::path_right = sensor_marks.readDistanceCM() > traversal::VALID_PATH_THRESHOLD ? 1 : 0;
@@ -558,19 +481,19 @@ void loop()
         // TODO: Youssef come here
         if (traversal::direction == 3)
         {
-            turn_control::turn_direction = turn_control::TurnCommand::LEFT;
+            turning::turn_direction = turning::TurnDirection::LEFT;
         }
         else if (traversal::direction == 2)
         {
-            turn_control::turn_direction = turn_control::TurnCommand::RIGHT;
+            turning::turn_direction = turning::TurnDirection::RIGHT;
         }
         else if (traversal::direction == 1)
         {
-            turn_control::turn_direction = turn_control::TurnCommand::FORWARD;
+            turning::turn_direction = turning::TurnDirection::FORWARD;
         }
         else
         {
-            turn_control::turn_direction = turn_control::TurnCommand::BACKWARD;
+            turning::turn_direction = turning::TurnDirection::BACKWARD;
         }
         // set state to turning
         MACHINE_STATE = MachineState::TURNING;
@@ -581,175 +504,82 @@ void loop()
         // Initialization
         if (isFirstStateIteration)
         {
-            //Sensor Initialization
-            // I2C.begin();
-            // mySensor.resetSensor(0x06);
-            // mySensor.initSensor(0x28);          //The I2C Address can be changed here inside this function in the library
-            // mySensor.setOperationMode(OPERATION_MODE_NDOF);   //Can be configured to other operation modes as desired
-            // mySensor.setUpdateMode(MANUAL);	//The default is AUTO. Changing to manual requires calling the relevant update functions prior to calling the read functions
-
-            //set kill order to false
-            turn_control::KILL_TURN = false;
-            
-
             oldTime = micros();
-            turn_control::start_time = oldTime;
             lastSampleTime = oldTime;
-            turn_control::start_time = oldTime;
-            turn_control::encoder3Val_start_m1 = encoder::getEncoderValue(ENCODER_M1); // Starting value for the encoder
-            turn_control::encoder3Val_start_m2 = encoder::getEncoderValue(ENCODER_M2);
-
-            //Find Current Heading and set to start
-            turn_control::turn_start = curr_Heading;
-
-            switch(turn_control::turn_direction) {
-                case turn_control::TurnCommand::FORWARD:
-                    turn_control::y_star = {0,0};
-                    //break state_machine;
-                    Serial.println("FORWARD");
-                    break;
-                case turn_control::TurnCommand::RIGHT:
-                    turn_control::y_star = {0,curr_Heading + M_PI/2};
-                    Serial.println("RIGHT");
-                    break;
-                case turn_control::TurnCommand::LEFT:
-                    turn_control::y_star = {0,curr_Heading-M_PI/2};
-                    Serial.println("LEFT");
-                    break;
-                case turn_control::TurnCommand::BACKWARD:
-                    //NEED TO DO NESTED LEFT TURNS!!!!
-                    //ALEX-GO HERE
-                    turn_control::y_star = {0,curr_Heading+M_PI};
-                    Serial.println("BAKWARD");
-                    break;
-
-                
-
-            }
-
-            if(turn_control::turn_direction == turn_control::TurnCommand::LEFT) {
-            }
-                if(turn_control::turn_direction == turn_control::TurnCommand::RIGHT) {
-            }
-                if(turn_control::turn_direction == turn_control::TurnCommand::FORWARD) {
-            }
-                if(turn_control::turn_direction == turn_control::TurnCommand::BACKWARD) {
-            }
-
-            // Stop wheels just in case
-            md.setM1Speed(0);
-            md.setM2Speed(0);
+            // This seems pointless but it's not mine to change
+            turning::encoder3Val_start_m1 = encoder::getEncoderValue(ENCODER_M1); // Starting value for the encoder
+            turning::encoder3Val_start_m2 = encoder::getEncoderValue(ENCODER_M2);
+            turning::enc_start_m1 = turning::encoder3Val_start_m1;
+            turning::enc_start_m2 = turning::encoder3Val_start_m2;
+            turning::encoder3Val_start_m1 = 0;
+            turning::encoder3Val_start_m2 = 0;
 
             isFirstStateIteration = false;
 
-            Serial.print("y_star: ");
-            Serial.println(turn_control::y_star(0,1));
-
-            Serial.print("Heading: ");
-            Serial.println(curr_Heading);
-
-            Serial.print("turn_start: ");
-            Serial.println(turn_control::turn_start);
-        }
-
-        if((newTime - turn_control::start_time >= 3000000) || (turn_control::KILL_TURN)){
-            isFirstStateIteration = true;
-            bool double_turn = false;
-
-            //Reset state-space vectors
-            turn_control::xk = {0,curr_Heading};
-            turn_control::yk = turn_control::xk;
-            turn_control::zk = {0,0};
-
-            //RESET DIRECTIONS
-            NORTH = ll_control::unwrap_Heading(NORTH*M_PI/180, mySensor.readEulerHeading()*M_PI/180)*180/M_PI;
-            SOUTH = NORTH + 180;
-            EAST = NORTH + 90;
-            WEST = NORTH + 270;
-            curr_Heading = NORTH*M_PI/180;
-
-            //ALEX TAKE A LOOK AT THIS (TRYING TO SAY)
-            //If turn command was backward, set machine state back to turning and set turn command to left
-            // switch(turn_control::turn_direction) {
-            //     case turn_control::TurnCommand::BACKWARD:
-            //         MACHINE_STATE = MachineState::TURNING;
-            //         turn_control::turn_direction = turn_control::TurnCommand::LEFT;
-            //         double_turn = true;
-            //         break;
-            // }
-            // if(!double_turn){
-                MACHINE_STATE = MachineState::DRIVING;
-                break;
-            //}
+// TODO: Should we remove this?
+#if STATE_DELAY == 1
+            md.setM1Speed(0);
+            md.setM2Speed(0);
+            delay(200);
+#endif
         }
 
         newTime = micros();
-        if (((newTime - lastSampleTime)) >= turn_control::SAMPLING_PERIOD)
+        if (((newTime - lastSampleTime)) >= turning::SAMPLING_PERIOD)
         {
-
-            turn_control::motor1_pos = encoder::getEncoderValue(ENCODER_M1);
-            turn_control::motor2_pos = encoder::getEncoderValue(ENCODER_M2);
-            
-            
-            mySensor.updateEuler();
-            mySensor.updateGyro();
-
+            // Collect data
+            turning::motor1_pos = encoder::getEncoderValue(ENCODER_M1) - turning::enc_start_m1;
+            turning::motor2_pos = encoder::getEncoderValue(ENCODER_M2) - turning::enc_start_m2;
             lastSampleTime = newTime;
 
-            double heading_meas = (mySensor.readEulerHeading() * M_PI / 180);
+            // Calculate reference position
+            switch (turning::turn_direction)
+            {
+            case turning::TurnDirection::LEFT:
+                turning::position_reference_left = -turning::SINGLE_WHEEL_POS_REFERENCE;
+                turning::position_reference_right = turning::SINGLE_WHEEL_POS_REFERENCE;
+                break;
+            case turning::TurnDirection::RIGHT:
+                turning::position_reference_left = turning::SINGLE_WHEEL_POS_REFERENCE;
+                turning::position_reference_right = -turning::SINGLE_WHEEL_POS_REFERENCE;
+                break;
+            case turning::TurnDirection::FORWARD:
+                turning::position_reference_left = 0;
+                turning::position_reference_right = 0;
+                break;
+            case turning::TurnDirection::BACKWARD:
+                // TODO: HOW DO WE DO A 180?
+                turning::position_reference_left = -turning::SINGLE_WHEEL_POS_REFERENCE;
+                turning::position_reference_right = -turning::SINGLE_WHEEL_POS_REFERENCE;
+                break;
+            }
 
-            
-            MotorCommand command = ll_control::compensateTurning(
-                turn_control::motor1_pos,
-                turn_control::motor2_pos,
+            MotorCommand command = ll_control::compensateMousePosition(
+                turning::position_reference_left,
+                turning::position_reference_right,
+                turning::motor1_pos,
+                turning::motor2_pos,
                 newTime,
                 oldTime,
-                turn_control::encoder3Val_start_m1,
-                turn_control::encoder3Val_start_m2,
-                turn_control::turn_start,
-                heading_meas,
-                turn_control::A,
-                turn_control::B,
-                turn_control::C,
-                turn_control::F_bar,
-                turn_control::y_star,
-                turn_control::yk,
-                turn_control::xk,
-                turn_control::xkp,
-                turn_control::zk,
-                turn_control::zkp,
-                turn_control::wk,
-                turn_control::u
-            );
+                turning::encoder3Val_start_m1,
+                turning::encoder3Val_start_m2,
+                turning::control_buffer_m1,
+                turning::control_buffer_m2);
 
-            //Check if we reached the right orientation then abort
-            if((turn_control::yk(0,1) >= turn_control::y_star(0,1) - 0.04) && (turn_control::yk(0,1) <= turn_control::y_star(0,1) + 0.04)){
-                turn_control::KILL_TURN = true;
+            // Apply control to motors
+            md.setM1Speed((int)command.motor1_pwm);
+            md.setM2Speed((int)command.motor2_pwm);
+            oldTime = newTime;
+
+            if (command.next_state == true)
+            {
+                Serial.print("Zero ESS");
                 md.setM1Speed(0);
                 md.setM2Speed(0);
-
-            }else{//Else apply normal control effort
-                // Apply control to motors
-                md.setM1Speed((int)command.motor1_pwm);
-                md.setM2Speed((int)command.motor2_pwm);
+                MACHINE_STATE = MachineState::DRIVING;
+                isFirstStateIteration = true;
             }
-            
-            // Serial.print("yk: {");
-            // Serial.print(turn_control::yk(0,0));
-            // Serial.print(" , ");
-            // Serial.print(turn_control::yk(0,1));
-            // Serial.println();
-
-            
-
-            //Update Data
-            oldTime = newTime;
-            turn_control::encoder3Val_start_m1 = turn_control::motor1_pos;
-            turn_control::encoder3Val_start_m2 = turn_control::motor2_pos;
-
-            
         }
-
         break;
     case MachineState::PROCESS_STOPPED:
         // Stop motors

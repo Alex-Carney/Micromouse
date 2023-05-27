@@ -7,9 +7,10 @@
 #define DEBUG_MODE 1
 // macro for speed mode: 0 slow 1 fast
 #define SPEED_MODE 1
+// macro for delay between states
+#define STATE_DELAY 1
 
 // end
 #endif
 
 // end of file
-
