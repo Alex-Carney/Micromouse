@@ -16,10 +16,17 @@
 class MazeTraversal
 {
 public:
+    // row column indices of the cell
+    struct Cell
+    {
+        int row;
+        int col;
+    };
     // Constructor
     MazeTraversal(int numRows, int numCols, int *maze);
     // Methods
-    bool traverse(int startRow, int startCol, int endRow, int endCol);
+    bool initilizeTraversal();
+    int traverse(int startRow, int startCol, int endRow, int endCol);
     // For maze given as an array
     bool logicTraverse(int startRow, int startCol, int endRow, int endCol);
 
@@ -34,12 +41,7 @@ private:
     int *maze;     // 2d array to represent the maze. 1 represent a passage, 0 a wall.
     bool **visited; // 2d array to represent visited cells. true = visited, false= not yet explored.
     int **numVisited; // 2d array to track wich cells have been visited in order.
-    // row column indices of the cell
-    struct Cell
-    {
-        int row;
-        int col;
-    };
+
     // stack for DFS
     Cell *stack;
     // top of stack index
@@ -48,7 +50,7 @@ private:
     void push(Cell cell);
     Cell pop();
 
-    bool initilizeTraversal();
+    
     bool isPassage(Cell cell);
     bool isVisited(Cell cell);
     bool isDestination();
@@ -77,6 +79,7 @@ private:
     void printMaze();
     void printVisited();
     void printNumVisited();
+    void printStack();
 
 
 };
