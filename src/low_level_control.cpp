@@ -8,11 +8,8 @@
 #include <Wire.h>
 #include "macros.h"
 
-
-
 // Set DEBUG_MODE to 1 to enable debugging
 #define DEBUG_MODE 0
-
 
 // Define a macro for PI
 #define M_PI 3.14159265358979323846
@@ -34,22 +31,20 @@ namespace ll_control
   namespace speed_compensation
   {
 
-
-
-    //CONSTANSTS FOR FAST SPEED
-    #if SPEED_MODE == 1
-      const double a = 2; //coefficient for u[k-1]
-      const double b = -1;  //coefficient for u[k-2]
-      const double c = 1.473; //coefficient for e[k]
-      const double d = -2.592; //coefficient for e[k-1]
-      const double e = 1.135; //coefficient for e[k-2]
-    #else
-      const double a = 2;      // coefficient for u[k-1]
-      const double b = -1;     // coefficient for u[k-2]
-      const double c = 2.131;  // coefficient for e[k]
-      const double d = -2.908; // coefficient for e[k-1]
-      const double e = 0.9612; // coefficient for e[k-2]
-    #endif
+// CONSTANSTS FOR FAST SPEED
+#if SPEED_MODE == 1
+    const double a = 2;      // coefficient for u[k-1]
+    const double b = -1;     // coefficient for u[k-2]
+    const double c = 1.473;  // coefficient for e[k]
+    const double d = -2.592; // coefficient for e[k-1]
+    const double e = 1.135;  // coefficient for e[k-2]
+#else
+    const double a = 2;      // coefficient for u[k-1]
+    const double b = -1;     // coefficient for u[k-2]
+    const double c = 2.131;  // coefficient for e[k]
+    const double d = -2.908; // coefficient for e[k-1]
+    const double e = 0.9612; // coefficient for e[k-2]
+#endif
   }
 
   // Compensator Constants for Turning
@@ -165,64 +160,11 @@ namespace ll_control
     return command;
   }
 
-  MotorCommand compensateTurning(
-      long motor1_pos,
-      long motor2_pos,
-      long newTime,
-      long oldTime,
-      long encoder3Val_start_m1,
-      long encoder3Val_start_m2,
-      double turn_start,
-      double heading_meas,
-      BLA::Matrix<2, 2> A,
-      BLA::Matrix<2, 2> B,
-      BLA::Matrix<2, 2> C,
-      BLA::Matrix<2, 4> F_bar,
-      BLA::Matrix<2, 1> y_star,
-      BLA::Matrix<2, 1>& yk,
-      BLA::Matrix<2, 1>& xk,
-      BLA::Matrix<2, 1>& xkp,
-      BLA::Matrix<2, 1>& zk,
-      BLA::Matrix<2, 1>& zkp,
-      BLA::Matrix<4, 1>& wk,
-      BLA::Matrix<2, 1>& u)
-  {
-    // Measure velocity
-    float vel_r = (60000000.0 * ((encoder3Val_start_m1 - motor1_pos)) / ((double)(newTime - oldTime) * 1260.0)) * M_PI / 30;
-    float vel_l = (60000000.0 * ((encoder3Val_start_m2 - motor2_pos)) / ((double)(newTime - oldTime) * 1260.0)) * M_PI / 30;
-
-    // Update measurement vector with linear velocity and angular velocity
-    // TODO: Look at warning here
-    yk = {-(0.0175 * vel_r) + (0.0175 * vel_l), unwrap_Heading(yk(0,1), heading_meas)};
-
-    // Predict next time step
-    xkp = A * xk + (B * u);
-    zkp = zk + y_star - yk;
-
-    // set to old time step
-    xk = xkp;
-    zk = zkp;
-
-    wk = xk && zk;
-
-    // calculate control effort
-    u = (F_bar * wk);
-
-
-    MotorCommand command;
-    command.motor1_pwm = getU_R(u(0, 0));
-    command.motor2_pwm = getU_R(-u(0, 1));
-    command.next_state = false;
-
-    return command;
-  }
-
   float unwrap_Heading(float previous_angle, float new_angle)
   {
     float d = new_angle - previous_angle;
     d = d > M_PI ? d - 2 * M_PI : (d < -M_PI ? d + 2 * M_PI : d);
     return previous_angle + d;
-
   }
 
 }
@@ -376,10 +318,3 @@ double getU_R(double R)
 
   return res;
 }
-
-
-
-  
-
-
-

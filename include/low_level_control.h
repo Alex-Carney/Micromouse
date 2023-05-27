@@ -12,18 +12,17 @@
 #include "ArduinoMotorShieldR3.h"
 #include "CircularBuffer.h"
 #include "MotorCommand.h"
-#include "BasicLinearAlgebra.h"
 
 namespace ll_control
 {
     /**
      * @brief Resolves discontinuities in heading function measurements [rad]
-     * 
+     *
      * @author Youssef Marzouk
-     * 
+     *
      * @param previous_angle Previous Angle Measurement [rad]
      * @param new_angle New Angle Measurement [rad]
-     * 
+     *
      * @return float (resolved heading value [rad])
      */
     float unwrap_Heading(float previous_angle, float new_angle);
@@ -64,29 +63,31 @@ namespace ll_control
     /**
      * @brief Sets the car's rotational position to the given value
      *
+     * Check branch youssef-turning for implementation
+     *
      * @author Youssef Marzouk
      */
-    MotorCommand compensateTurning(
-        long motor1_pos,
-        long motor2_pos,
-        long newTime,
-        long oldTime,
-        long encoder3Val_start_m1,
-        long encoder3Val_start_m2,
-        double turn_start,
-        double heading_meas,
-        BLA::Matrix<2, 2> A,
-        BLA::Matrix<2, 2> B,
-        BLA::Matrix<2, 2> C,
-        BLA::Matrix<2, 4> F_bar,
-        BLA::Matrix<2, 1> y_star,
-        BLA::Matrix<2, 1>& yk,
-        BLA::Matrix<2, 1>& xk,
-        BLA::Matrix<2, 1>& xkp,
-        BLA::Matrix<2, 1>& zk,
-        BLA::Matrix<2, 1>& zkp,
-        BLA::Matrix<4, 1>& wk,
-        BLA::Matrix<2, 1>& u);
+    //     MotorCommand compensateTurning(
+    //         long motor1_pos,
+    //         long motor2_pos,
+    //         long newTime,
+    //         long oldTime,
+    //         long encoder3Val_start_m1,
+    //         long encoder3Val_start_m2,
+    //         double turn_start,
+    //         double heading_meas,
+    //         BLA::Matrix<2, 2> A,
+    //         BLA::Matrix<2, 2> B,
+    //         BLA::Matrix<2, 2> C,
+    //         BLA::Matrix<2, 4> F_bar,
+    //         BLA::Matrix<2, 1> y_star,
+    //         BLA::Matrix<2, 1> &yk,
+    //         BLA::Matrix<2, 1> &xk,
+    //         BLA::Matrix<2, 1> &xkp,
+    //         BLA::Matrix<2, 1> &zk,
+    //         BLA::Matrix<2, 1> &zkp,
+    //         BLA::Matrix<4, 1> &wk,
+    //         BLA::Matrix<2, 1> &u);
+    // }
 }
-
 #endif // LOW_LEVEL_CONTROL_H
