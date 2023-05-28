@@ -9,6 +9,7 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include "macros.h"
+#include "MazeTraversal.h"
 
 /****************************************************/
 /*
@@ -62,6 +63,18 @@ float sensor3_coefficients[] = {1.3e4, -1.149};
 PositionSensor sensor_big_circle((int)A9, sensor3_coefficients);
 int NUM_SAMPLES = 3;
 
+// TODO: Majd
+int maze[8][10] = {
+    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+    {1, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+    {1, 1, 1, 1, 1, 1, 1, 0, 1, 1},
+    {1, 0, 0, 0, 0, 0, 1, 0, 0, 1},
+    {1, 0, 1, 1, 1, 0, 1, 1, 0, 1},
+    {1, 0, 1, 0, 0, 0, 0, 1, 0, 1},
+    {1, 0, 1, 0, 1, 1, 0, 0, 0, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+};
+MazeTraversal mazeTraversal(8, 10, &maze[0][0]);
 namespace traversal
 {
     // Constants for stopping
@@ -81,6 +94,7 @@ namespace traversal
     int path_forward = -1;
     float pre_distance_left = 0;
     float pre_distance_right = 0;
+    int direction = 0; // which direction to turn. 1 = forward, 2 = right, 3 = left, 4 = back
 
 }
 
@@ -220,6 +234,9 @@ void setup()
     mySensor.initSensor(0x28);                      // The I2C Address can be changed here inside this function in the library
     mySensor.setOperationMode(OPERATION_MODE_NDOF); // Can be configured to other operation modes as desired
     mySensor.setUpdateMode(MANUAL);                 // The default is AUTO. Changing to manual requires calling the relevant update functions prior to calling the read functions
+
+    // Traversal
+    mazeTraversal.initilizeTraversal();
 
 // Peripheral Initialization
 #ifdef DEBUG_MODE
@@ -490,16 +507,28 @@ void loop()
         traversal::path_right = sensor_marks.readDistanceCM(NUM_SAMPLES) > traversal::VALID_PATH_THRESHOLD ? 1 : 0;
         traversal::path_forward = sensor_big_circle.readDistanceCM(NUM_SAMPLES) > traversal::VALID_PATH_THRESHOLD ? 1 : 0;
 
+        Serial.print("Forward");
+        Serial.println(traversal::path_forward);
+        Serial.print("left");
+        Serial.println(traversal::path_left);
+        Serial.print("right");
+        Serial.println(traversal::path_right);
+
+        traversal::direction = mazeTraversal.traverse(traversal::path_right, traversal::path_left, traversal::path_forward, 0); 
+
+
+
         // make a decision about which way to turn - MAJD
-        if (traversal::path_left == 1)
+        // TODO: Youssef come here
+        if (traversal::direction == 3)
         {
             turning::turn_direction = turning::TurnDirection::LEFT;
         }
-        else if (traversal::path_right == 1)
+        else if (traversal::direction == 2)
         {
             turning::turn_direction = turning::TurnDirection::RIGHT;
         }
-        else if (traversal::path_forward == 1)
+        else if (traversal::direction == 1)
         {
             turning::turn_direction = turning::TurnDirection::FORWARD;
         }
