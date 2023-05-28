@@ -51,12 +51,20 @@ namespace ll_control
   // Compensator Constants Position Control
   namespace position_compensation
   {
+#if POS_MODE == 1
+    const double a = 1.81;
+    const double b = .2745;
+    const double c = .003491;
+    const double d = -.271;
+    const double e = -.8182;
+#else
     const double a = 1.81;          // coefficient for u[k-1]
     const double b = 1.18 * 0.2516; //.1936; // coefficient for e[k]
     const double c = 1.18 * 0.0032; //.002463; // coefficient for e[k-1]
     const double d = 1.18 * -.2484; //-.1912; // coefficient for e[k-2]
     const double e = -.8182;        // coefficient for u[k-2]
 
+#endif
     const double ERROR_TOLERANCE = 0.05;
 
     const double EXTRA_COMPENSATION = 1.2;
@@ -89,7 +97,7 @@ namespace ll_control
 
     MotorCommand command;
     command.motor1_pwm = getUForPos(motor1_values[2]);
-    command.motor2_pwm = getUForPos(motor2_values[2]);
+    command.motor2_pwm = getUForPos(motor2_values[2]) * position_compensation::EXTRA_COMPENSATION;
 
     // print out the error values, motor1_values[1] and motor2_values[1]
 

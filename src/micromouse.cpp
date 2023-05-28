@@ -61,7 +61,7 @@ float sensor2_coefficients[] = {1.18e4, -1.138};
 PositionSensor sensor_marks((int)A11, sensor2_coefficients);
 float sensor3_coefficients[] = {1.3e4, -1.149};
 PositionSensor sensor_big_circle((int)A9, sensor3_coefficients);
-int NUM_SAMPLES = 3;
+int NUM_SAMPLES = 10;
 
 // TODO: Majd
 int maze[8][10] = {
@@ -79,10 +79,10 @@ namespace traversal
 {
     // Constants for stopping
     const int PATH_DISTANCE_DIFFERENTIAL_THRESHOLD = 10; // (cm) If the difference in distance is greater than this, it's an intersection
-    const int STOP_DISTANCE_THRESHOLD_WALL_FOLLOW_OFF = 29; // (cm) Distance threshold for stopping at a wall (front only)
+    const int STOP_DISTANCE_THRESHOLD_WALL_FOLLOW_OFF = 25; // (cm) Distance threshold for stopping at a wall (front only)
     const int STOP_DISTANCE_THRESHOLD_WALL_FOLLOW_ON = 22;  // (cm) Distance threshold for stopping at a wall (front only)
-    const int INTERSECTION_WALK_DISTANCE = 11;           // [Default = 15] (cm) Distance to walk once intersection is found
-    const int DESIRED_WALL_DIST = 9;                    // (cm) Distance to keep from wall, when a front wall is present
+    const int INTERSECTION_WALK_DISTANCE = 12;           // [Default = 15] (cm) Distance to walk once intersection is found
+    const int DESIRED_WALL_DIST = 5;                    // (cm) Distance to keep from wall, when a front wall is present
 
     // Constants for turning
     const int VALID_PATH_THRESHOLD = 25; // (cm) If the distance to the left,right,forward wall is greater than this, it's a valid path
@@ -158,7 +158,7 @@ namespace wall_control
     bool control_based_on_wall = false;
     // when to turn on wall following
     #if SPEED_MODE == 1
-        const long WALL_FOLLOW_TIME = 1600000; // 1.0 seconds
+        const long WALL_FOLLOW_TIME = 1650000; // 1.0 seconds
     #else
         const long WALL_FOLLOW_TIME = 2200000; // 2.5 seconds
     #endif 
@@ -239,8 +239,6 @@ void setup()
     mazeTraversal.initilizeTraversal();
 
 // Peripheral Initialization
-#ifdef DEBUG_MODE
-#if DEBUG_MODE == 1
     Serial.begin(115200); // Initialize the Serial Port to view information on the Serial Monitor
 
     mySensor.updateAccelConfig();
@@ -261,8 +259,6 @@ void setup()
     delay(1000); // Wait for a second
     Serial.println("%1...");
     delay(1000); // Wait for a second
-#endif
-#endif
 }
 
 void loop()
@@ -348,6 +344,8 @@ void loop()
             traversal::pre_distance_right = dist_right_cm; 
             if ( (wall || (intersection && wall_control::control_based_on_wall == true) ) )
             {
+                Serial.print("I think there is a wall: ");
+                Serial.println(dist_front_cm);
                 #if DEBUG_MODE == 1
                 Serial.println("IM IN HERE!!!");
                 Serial.println("I AM HERE BECAUSE OF A ");
@@ -363,15 +361,17 @@ void loop()
             }
 
             // Calculate Del W_ref from Del X
-            //double delWRef = wall_control::Kp * dist_diff;
-            double delWRef = calculate_delWref(dist_diff);
+            double delWRef = wall_control::Kp * dist_diff;
+            //double delWRef = calculate_delWref(dist_diff);
 
             if(drive_control::ramp_idx > 1.0) {
                 drive_control::ramp_idx = drive_control::ramp_idx - 1.0;
             }
 
+            #if DEBUG_MODE == 1
             Serial.print("delwRef: ");
             Serial.println(delWRef);
+            #endif
 
 
 // Calculate new reference speeds - only if wall following on
@@ -394,10 +394,12 @@ void loop()
 #endif
 #endif
 
+            #if DEBUG_MODE == 1
             Serial.print("Motor 1 reference speed: ");
             Serial.println(drive_control::motor1_reference_speed);
             Serial.print("Motor 2 reference speed: ");
             Serial.println(drive_control::motor2_reference_speed);
+            #endif
 
             // Compensate wheel speed
             MotorCommand command = ll_control::compensateDriveSpeed(
@@ -444,20 +446,25 @@ void loop()
 #if STATE_DELAY == 1
             md.setM1Speed(0);
             md.setM2Speed(0);
-            delay(200);
+            delay(STATE_DELAY_VALUE);
 #endif
-            double curr_pos_from_wall = sensor_big_circle.readDistanceCM(NUM_SAMPLES);
+            double curr_pos_from_wall = sensor_big_circle.readDistanceCM(2 * NUM_SAMPLES);
             double pos_to_move_rad = ((curr_pos_from_wall - traversal::DESIRED_WALL_DIST) * 2 * M_PI) / WHEEL_CIRCUMFERENCE;
-
             if (pos_control::stop_mode == pos_control::StopMode::WALL_PRESENT)
             {
                 // Compensate distance based on wall
                 pos_control::position_reference = pos_to_move_rad;
+                Serial.print("There is a wall this far away: ");
+                Serial.println(curr_pos_from_wall);
+                Serial.print("Because there is a wall, I am moving: ");
+                Serial.println(pos_to_move_rad);
             }
             else
             {
                 // No wall to compensate for
                 pos_control::position_reference = (traversal::INTERSECTION_WALK_DISTANCE * 2 * M_PI) / WHEEL_CIRCUMFERENCE;
+                Serial.print("Since there is no wall, I am moving: ");
+                Serial.println(pos_control::position_reference);
             }
         }
         // not first run
@@ -488,7 +495,9 @@ void loop()
 
             if (command.next_state == true)
             {
+                #if DEBUG_MODE == 1
                 Serial.print("Zero ESS");
+                #endif
 
                 MACHINE_STATE = MachineState::LOGIC;
                 isFirstStateIteration = true;
@@ -500,35 +509,51 @@ void loop()
 #if STATE_DELAY == 1
         md.setM1Speed(0);
         md.setM2Speed(0);
-        delay(200);
+        delay(STATE_DELAY_VALUE);
 #endif
         // Check what directions are valid
         traversal::path_left = sensor_mini_right.readDistanceCM(NUM_SAMPLES) > traversal::VALID_PATH_THRESHOLD ? 1 : 0;
         traversal::path_right = sensor_marks.readDistanceCM(NUM_SAMPLES) > traversal::VALID_PATH_THRESHOLD ? 1 : 0;
         traversal::path_forward = sensor_big_circle.readDistanceCM(NUM_SAMPLES) > traversal::VALID_PATH_THRESHOLD ? 1 : 0;
 
+        #if DEBUG_MODE == 1
         Serial.print("Forward");
         Serial.println(traversal::path_forward);
         Serial.print("left");
         Serial.println(traversal::path_left);
         Serial.print("right");
         Serial.println(traversal::path_right);
+        #endif
 
-        traversal::direction = mazeTraversal.traverse(traversal::path_right, traversal::path_left, traversal::path_forward, 0); 
-
-
-
+        // traversal::direction = mazeTraversal.traverse(traversal::path_right, traversal::path_left, traversal::path_forward, 0); 
         // make a decision about which way to turn - MAJD
         // TODO: Youssef come here
-        if (traversal::direction == 3)
+        // if (traversal::direction == 3)
+        // {
+        //     turning::turn_direction = turning::TurnDirection::LEFT;
+        // }
+        // else if (traversal::direction == 2)
+        // {
+        //     turning::turn_direction = turning::TurnDirection::RIGHT;
+        // }
+        // else if (traversal::direction == 1)
+        // {
+        //     turning::turn_direction = turning::TurnDirection::FORWARD;
+        // }
+        // else
+        // {
+        //     turning::turn_direction = turning::TurnDirection::BACKWARD;
+        // }
+        // make a decision about which way to turn - MAJD
+        if (traversal::path_left == 1)
         {
             turning::turn_direction = turning::TurnDirection::LEFT;
         }
-        else if (traversal::direction == 2)
+        else if (traversal::path_right == 1)
         {
             turning::turn_direction = turning::TurnDirection::RIGHT;
         }
-        else if (traversal::direction == 1)
+        else if (traversal::path_forward == 1)
         {
             turning::turn_direction = turning::TurnDirection::FORWARD;
         }
@@ -545,9 +570,6 @@ void loop()
         // Initialization
         if (isFirstStateIteration)
         {
-            md.setM1Speed(0);
-            md.setM2Speed(0);
-            delay(100);
 
             oldTime = micros();
             lastSampleTime = oldTime;
@@ -565,7 +587,7 @@ void loop()
 #if STATE_DELAY == 1
             md.setM1Speed(0);
             md.setM2Speed(0);
-            delay(200);
+            delay(STATE_DELAY_VALUE);
 #endif
         }
 
@@ -585,8 +607,8 @@ void loop()
                 turning::position_reference_right = turning::SINGLE_WHEEL_POS_REFERENCE;
                 break;
             case turning::TurnDirection::RIGHT:
-                turning::position_reference_left = turning::SINGLE_WHEEL_POS_REFERENCE;
-                turning::position_reference_right = -turning::SINGLE_WHEEL_POS_REFERENCE;
+                turning::position_reference_left = .9 * turning::SINGLE_WHEEL_POS_REFERENCE;
+                turning::position_reference_right = -.9 * turning::SINGLE_WHEEL_POS_REFERENCE;
                 break;
             case turning::TurnDirection::FORWARD:
                 turning::position_reference_left = 0;
@@ -618,7 +640,9 @@ void loop()
 
             if (command.next_state == true)
             {
+                #if DEBUG_MODE == 1
                 Serial.print("Zero ESS");
+                #endif
                 md.setM1Speed(0);
                 md.setM2Speed(0);
                 MACHINE_STATE = MachineState::DRIVING;

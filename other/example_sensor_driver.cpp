@@ -28,9 +28,14 @@ void loop()
 {
     float distanceRAW = sensor_big_circle.readDistanceRaw();
     float distanceCM = sensor_big_circle.readDistanceCM();
+    float distanceAveraged = sensor_big_circle.readDistanceCMMedian(20);
 
     Serial.print("Distance in cm: ");
     Serial.print(distanceCM);
+    Serial.println();
+
+    Serial.print("Distance Averaged: ");
+    Serial.print(distanceAveraged);
     Serial.println();
 
     Serial.print("Distance Raw: ");

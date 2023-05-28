@@ -35,6 +35,45 @@ float PositionSensor::readDistanceCM(int num_averages)
     return distance;
 }
 
+float PositionSensor::readDistanceCMMedian(int num_medians)
+{
+    float distances[num_medians];
+    for (int i = 0; i < num_medians; i++)
+    {
+        distances[i] = readDistanceRaw();
+    }
+
+    // Sort the distances
+    for (int i = 0; i < num_medians; i++)
+    {
+        for (int j = i + 1; j < num_medians; j++)
+        {
+            if (distances[i] > distances[j])
+            {
+                float temp = distances[i];
+                distances[i] = distances[j];
+                distances[j] = temp;
+            }
+        }
+    }
+
+    // Calculate the median
+    float median;
+    if (num_medians % 2 == 0)
+    {
+        median = (distances[num_medians/2 - 1] + distances[num_medians/2]) / 2.0;
+    }
+    else
+    {
+        median = distances[num_medians/2];
+    }
+
+    // Convert to distance
+    median = _coefficients[0] * pow(median, _coefficients[1]);
+    return median;
+
+}
+
 int PositionSensor::readDistanceRaw()
 {
     return analogRead(_pin);
