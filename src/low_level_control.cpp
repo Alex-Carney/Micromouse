@@ -157,7 +157,7 @@ namespace ll_control
 
     MotorCommand command;
     command.motor1_pwm = getU(motor1_values[2]);
-    command.motor2_pwm = getU(motor2_values[2]) * position_compensation::EXTRA_COMPENSATION;
+    command.motor2_pwm = getU(motor2_values[2]);
     command.next_state = false;
 
     return command;

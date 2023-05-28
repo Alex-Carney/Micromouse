@@ -167,7 +167,7 @@ namespace wall_control
     double integral = 0;
 
     // Gains:
-    const double Kp = 0.06;
+    const double Kp = 0.05;
     const double Ki = 0.0;
     const double Kd = 0.0;
 }
@@ -695,8 +695,9 @@ bool isWall(float dist_front_cm, bool is_wall_following_on)
 
 double calculate_delWref(double dist_diff) 
 {
-    wall_control::integral = wall_control::integral + dist_diff * drive_control::SAMPLING_PERIOD;
-    double derivative = (dist_diff - wall_control::prev_error) / drive_control::SAMPLING_PERIOD;
+    double dt = drive_control::SAMPLING_PERIOD / 1000000.0;
+    wall_control::integral = wall_control::integral + dist_diff * dt;
+    double derivative = (dist_diff - wall_control::prev_error) / dt;
     double delWref = wall_control::Kp * dist_diff + wall_control::Ki * wall_control::integral + wall_control::Kd * derivative;
     wall_control::prev_error = delWref;
     return delWref;
