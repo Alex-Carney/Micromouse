@@ -23,12 +23,17 @@ public:
         int col;
     };
     // Constructor
-    MazeTraversal(int numRows, int numCols, int *maze);
+    MazeTraversal(int numRows, int numCols);
     // Methods
     bool initilizeTraversal();
     int traverse(int startRow, int startCol, int endRow, int endCol);
     // For maze given as an array
     bool logicTraverse(int startRow, int startCol, int endRow, int endCol);
+
+    void printDirection(int d);
+
+    int state = 0; // 0 = traverse. 1 = backtrack.
+    Cell position;  
 
 private:
     /* Here we assume the maze is given as a 2D matrix for demonstration purposes.
@@ -36,36 +41,32 @@ private:
     This doesn't mean the code only works for this maze, this method is general.
     Once our mouse can explore a physical maze, this will be later adjusted.
     */
-    int numRows;
-    int numCols;
+    int numRows = 500;
+    int numCols = 500;
     int *maze;     // 2d array to represent the maze. 1 represent a passage, 0 a wall.
-    bool **visited; // 2d array to represent visited cells. true = visited, false= not yet explored.
+    int **visited; // 2d array to represent visited cells. true = visited, false= not yet explored.
     int **numVisited; // 2d array to track wich cells have been visited in order.
 
     // stack for DFS
     Cell *stack;
+    int *path_stack;
     // top of stack index
     int top;
+    int path_top;
     // stack methods
     void push(Cell cell);
     Cell pop();
+    void path_push(int d);
+    int path_pop();
 
     
-    bool isPassage(Cell cell);
-    bool isVisited(Cell cell);
-    bool isDestination();
+    bool isDestination(int row, int col);
     bool dfs(Cell currentCell, Cell endCell); // For maze given as array
     void resizeVisited(int newNumRows, int newNumCols);
 
-    bool canGoLeft();
-    bool canGoRight();
-    bool canGoUp();
-    bool canGoDown();
+ 
 
-    void goLeft();
-    void goRight();
-    void goUp();
-    void goDown();
+    int getReverseDirection(int d);
 
 
     // free memory
@@ -80,6 +81,8 @@ private:
     void printVisited();
     void printNumVisited();
     void printStack();
+    void printPathStack();
+    
 
 
 };
