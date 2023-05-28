@@ -41,7 +41,9 @@ const int ENCODER_M2 = 2;
 
 // Function prototypes
 bool isIntersection(float dist_left_cm, float dist_right_cm);
-bool isWall(float dist_front_cm);
+bool isIntersectionRaw(float dist_left_cm, float dist_right_cm);
+bool isWall(float dist_front_cm, bool is_wall_following_on);
+double calculate_delWref(double dist_diff);
 
 // ------- Global variable definitions ----------- //
 // Timing
@@ -58,17 +60,19 @@ float sensor2_coefficients[] = {1.18e4, -1.138};
 PositionSensor sensor_marks((int)A11, sensor2_coefficients);
 float sensor3_coefficients[] = {1.3e4, -1.149};
 PositionSensor sensor_big_circle((int)A9, sensor3_coefficients);
+int NUM_SAMPLES = 3;
 
 namespace traversal
 {
     // Constants for stopping
     const int PATH_DISTANCE_DIFFERENTIAL_THRESHOLD = 10; // (cm) If the difference in distance is greater than this, it's an intersection
-    const int STOP_DISTANCE_THRESHOLD = 24;              // (cm) Distance threshold for stopping at a wall (front only)
-    const int INTERSECTION_WALK_DISTANCE = 15;           // (cm) Distance to walk once intersection is found
-    const int DESIRED_WALL_DIST = 11;                    // (cm) Distance to keep from wall, when a front wall is present
+    const int STOP_DISTANCE_THRESHOLD_WALL_FOLLOW_OFF = 29; // (cm) Distance threshold for stopping at a wall (front only)
+    const int STOP_DISTANCE_THRESHOLD_WALL_FOLLOW_ON = 22;  // (cm) Distance threshold for stopping at a wall (front only)
+    const int INTERSECTION_WALK_DISTANCE = 11;           // [Default = 15] (cm) Distance to walk once intersection is found
+    const int DESIRED_WALL_DIST = 9;                    // (cm) Distance to keep from wall, when a front wall is present
 
     // Constants for turning
-    const int VALID_PATH_THRESHOLD = 20; // (cm) If the distance to the left,right,forward wall is less than this, it's a valid path
+    const int VALID_PATH_THRESHOLD = 25; // (cm) If the distance to the left,right,forward wall is greater than this, it's a valid path
 
     // Globals
     // For Path managing and maze traversal
@@ -116,7 +120,7 @@ namespace drive_control
     const int SAMPLING_PERIOD = 40000; // Sampling period in microseconds
     const double MAX_SPEED_RADS = 3;   // Maximum speed in radians per second
 #endif
-    const int MAX_SPEED_AFTER_WALL_COMPENSATION = MAX_SPEED_RADS + 1;
+    const double MAX_SPEED_AFTER_WALL_COMPENSATION = MAX_SPEED_RADS + 1;
     // Globals
     long motor1_pos;
     long motor2_pos;
@@ -129,12 +133,29 @@ namespace drive_control
     // 0: velocity, 1: error, 2: control effort
     CircularBuffer<double> control_buffer_m1(2, 3); // 2 steps back. 3 values per step
     CircularBuffer<double> control_buffer_m2(2, 3); // 2 steps back. 3 values per step
-    const double DEL_X_GAIN = 0.05;
+    // Ramp input instead of step input
+    const double MAX_RAMP_IDX = 40;
+    double ramp_idx = MAX_RAMP_IDX;
+}
 
-    // when to turn on wall following
-    const long WALL_FOLLOW_TIME = 1500000; // 1.5 seconds
+namespace wall_control 
+{
     long time_started_driving = 0;
     bool control_based_on_wall = false;
+    // when to turn on wall following
+    #if SPEED_MODE == 1
+        const long WALL_FOLLOW_TIME = 1600000; // 1.0 seconds
+    #else
+        const long WALL_FOLLOW_TIME = 2200000; // 2.5 seconds
+    #endif 
+
+    double prev_error = 0;
+    double integral = 0;
+
+    // Gains:
+    const double Kp = 0.06;
+    const double Ki = 0.0;
+    const double Kd = 0.0;
 }
 
 // Global variables for TURNING
@@ -152,7 +173,7 @@ namespace turning
     long motor2_pos;
     CircularBuffer<double> control_buffer_m1(2, 3); // 2 steps back. 3 values per step
     CircularBuffer<double> control_buffer_m2(2, 3); // 2 steps back. 3 values per step
-    double SINGLE_WHEEL_POS_REFERENCE = 3.55;       // (rad) How much to turn one wheel for all turns
+    double SINGLE_WHEEL_POS_REFERENCE = 3.5;       // (rad) How much to turn one wheel for all turns
     enum class TurnDirection
     {
         LEFT,
@@ -260,16 +281,18 @@ void loop()
             drive_control::encoder3Val_start_m2 = encoder::getEncoderValue(ENCODER_M2);
 
             // Stop wheels just in case
-            md.setM1Speed(0);
-            md.setM2Speed(0);
+            // md.setM1Speed(0);
+            // md.setM2Speed(0);
 
             // State transition logic: Record distances right, left forward.
             traversal::pre_distance_right = sensor_mini_right.readDistanceCM();
             traversal::pre_distance_left = sensor_marks.readDistanceCM();
 
             isFirstStateIteration = false;
-            drive_control::time_started_driving = micros();
-            drive_control::control_based_on_wall = false;
+            wall_control::time_started_driving = micros();
+            wall_control::control_based_on_wall = false;
+
+            drive_control::ramp_idx = drive_control::MAX_RAMP_IDX;
         }
 
         newTime = micros();
@@ -284,31 +307,35 @@ void loop()
             lastSampleTime = newTime;
 
             // Check if we should turn on wall following
-            if (drive_control::control_based_on_wall == false)
+            if (wall_control::control_based_on_wall == false)
             {
-                if ((newTime - drive_control::time_started_driving) > drive_control::WALL_FOLLOW_TIME)
+                if ((newTime - wall_control::time_started_driving) > wall_control::WALL_FOLLOW_TIME)
                 {
-                    drive_control::control_based_on_wall = true;
+                    wall_control::control_based_on_wall = true;
                 }
             }
 
             // Measure distances to both walls, in CM
-            float dist_left_cm = sensor_mini_right.readDistanceCM();
-            float dist_right_cm = sensor_marks.readDistanceCM();
+            float dist_left_cm = sensor_mini_right.readDistanceCM(NUM_SAMPLES);
+            float dist_right_cm = sensor_marks.readDistanceCM(NUM_SAMPLES);
             float dist_diff = dist_left_cm - dist_right_cm;
 
             // Measure front distance for later
-            float dist_front_cm = sensor_big_circle.readDistanceCM();
-            bool wall = isWall(dist_front_cm);
-            bool intersection = isIntersection(dist_left_cm, dist_right_cm);
+            float dist_front_cm = sensor_big_circle.readDistanceCM(NUM_SAMPLES);
+            bool wall = isWall(dist_front_cm, wall_control::control_based_on_wall);
+            // Majd version
+            //bool intersection = isIntersection(dist_left_cm, dist_right_cm);
+            bool intersection = isIntersectionRaw(dist_left_cm, dist_right_cm);
             // Update pre distances for next iteration
             traversal::pre_distance_left = dist_left_cm;
-            traversal::pre_distance_right = dist_right_cm;
-            if ((wall || intersection) && drive_control::control_based_on_wall == true)
+            traversal::pre_distance_right = dist_right_cm; 
+            if ( (wall || (intersection && wall_control::control_based_on_wall == true) ) )
             {
+                #if DEBUG_MODE == 1
                 Serial.println("IM IN HERE!!!");
                 Serial.println("I AM HERE BECAUSE OF A ");
                 Serial.println(wall ? "WALL" : "INTERSECTION");
+                #endif
                 md.setM1Speed(0);
                 md.setM2Speed(0);
                 // pos_control::front_wall_mode = (int)wall;
@@ -319,27 +346,41 @@ void loop()
             }
 
             // Calculate Del W_ref from Del X
-            double delWRef = drive_control::DEL_X_GAIN * dist_diff;
+            //double delWRef = wall_control::Kp * dist_diff;
+            double delWRef = calculate_delWref(dist_diff);
+
+            if(drive_control::ramp_idx > 1.0) {
+                drive_control::ramp_idx = drive_control::ramp_idx - 1.0;
+            }
+
+            Serial.print("delwRef: ");
+            Serial.println(delWRef);
+
 
 // Calculate new reference speeds - only if wall following on
 #ifdef WALL_FOLLOW
 #if WALL_FOLLOW == 1
-            if (drive_control::control_based_on_wall == true)
+            if (wall_control::control_based_on_wall == true)
             {
-                drive_control::motor1_reference_speed = min(drive_control::MAX_SPEED_RADS + delWRef, drive_control::MAX_SPEED_AFTER_WALL_COMPENSATION);
-                drive_control::motor2_reference_speed = min(drive_control::MAX_SPEED_RADS - delWRef, drive_control::MAX_SPEED_AFTER_WALL_COMPENSATION);
+                drive_control::motor1_reference_speed = min(drive_control::MAX_SPEED_RADS + (delWRef/2), drive_control::MAX_SPEED_AFTER_WALL_COMPENSATION);
+                drive_control::motor2_reference_speed = min(drive_control::MAX_SPEED_RADS - (delWRef/2), drive_control::MAX_SPEED_AFTER_WALL_COMPENSATION);
             }
             else
             {
-                drive_control::motor1_reference_speed = drive_control::MAX_SPEED_RADS;
-                drive_control::motor2_reference_speed = drive_control::MAX_SPEED_RADS;
+                drive_control::motor1_reference_speed = (drive_control::MAX_SPEED_RADS / drive_control::ramp_idx);
+                drive_control::motor2_reference_speed = (drive_control::MAX_SPEED_RADS / drive_control::ramp_idx);
             }
 
 #else
-            drive_control::motor1_reference_speed = drive_control::MAX_SPEED_RADS;
-            drive_control::motor2_reference_speed = drive_control::MAX_SPEED_RADS;
+            drive_control::motor1_reference_speed = (drive_control::MAX_SPEED_RADS / drive_control::ramp_idx);
+            drive_control::motor2_reference_speed = (drive_control::MAX_SPEED_RADS / drive_control::ramp_idx);
 #endif
 #endif
+
+            Serial.print("Motor 1 reference speed: ");
+            Serial.println(drive_control::motor1_reference_speed);
+            Serial.print("Motor 2 reference speed: ");
+            Serial.println(drive_control::motor2_reference_speed);
 
             // Compensate wheel speed
             MotorCommand command = ll_control::compensateDriveSpeed(
@@ -388,7 +429,7 @@ void loop()
             md.setM2Speed(0);
             delay(200);
 #endif
-            double curr_pos_from_wall = sensor_big_circle.readDistanceCM();
+            double curr_pos_from_wall = sensor_big_circle.readDistanceCM(NUM_SAMPLES);
             double pos_to_move_rad = ((curr_pos_from_wall - traversal::DESIRED_WALL_DIST) * 2 * M_PI) / WHEEL_CIRCUMFERENCE;
 
             if (pos_control::stop_mode == pos_control::StopMode::WALL_PRESENT)
@@ -445,9 +486,9 @@ void loop()
         delay(200);
 #endif
         // Check what directions are valid
-        traversal::path_left = sensor_mini_right.readDistanceCM() > traversal::VALID_PATH_THRESHOLD ? 1 : 0;
-        traversal::path_right = sensor_marks.readDistanceCM() > traversal::VALID_PATH_THRESHOLD ? 1 : 0;
-        traversal::path_forward = sensor_big_circle.readDistanceCM() > traversal::VALID_PATH_THRESHOLD ? 1 : 0;
+        traversal::path_left = sensor_mini_right.readDistanceCM(NUM_SAMPLES) > traversal::VALID_PATH_THRESHOLD ? 1 : 0;
+        traversal::path_right = sensor_marks.readDistanceCM(NUM_SAMPLES) > traversal::VALID_PATH_THRESHOLD ? 1 : 0;
+        traversal::path_forward = sensor_big_circle.readDistanceCM(NUM_SAMPLES) > traversal::VALID_PATH_THRESHOLD ? 1 : 0;
 
         // make a decision about which way to turn - MAJD
         if (traversal::path_left == 1)
@@ -475,6 +516,10 @@ void loop()
         // Initialization
         if (isFirstStateIteration)
         {
+            md.setM1Speed(0);
+            md.setM2Speed(0);
+            delay(100);
+
             oldTime = micros();
             lastSampleTime = oldTime;
             // This seems pointless but it's not mine to change
@@ -520,8 +565,8 @@ void loop()
                 break;
             case turning::TurnDirection::BACKWARD:
                 // TODO: HOW DO WE DO A 180?
-                turning::position_reference_left = -turning::SINGLE_WHEEL_POS_REFERENCE;
-                turning::position_reference_right = -turning::SINGLE_WHEEL_POS_REFERENCE;
+                turning::position_reference_left = 2*turning::SINGLE_WHEEL_POS_REFERENCE;
+                turning::position_reference_right = -2*turning::SINGLE_WHEEL_POS_REFERENCE;
                 break;
             }
 
@@ -562,6 +607,18 @@ void loop()
     }
 }
 
+bool isIntersectionRaw(float dist_left_cm, float dist_right_cm) 
+{
+    if ( (abs(dist_left_cm) > traversal::VALID_PATH_THRESHOLD) || (abs(dist_right_cm) > traversal::VALID_PATH_THRESHOLD) )
+    {
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+
 bool isIntersection(float dist_left_cm, float dist_right_cm)
 {
 
@@ -587,12 +644,31 @@ bool isIntersection(float dist_left_cm, float dist_right_cm)
     return false;
 }
 
-bool isWall(float dist_front_cm)
+bool isWall(float dist_front_cm, bool is_wall_following_on)
 {
     // Check if wall
-    if (dist_front_cm < traversal::STOP_DISTANCE_THRESHOLD)
+    if (is_wall_following_on)
     {
-        return true;
+        if (dist_front_cm < traversal::STOP_DISTANCE_THRESHOLD_WALL_FOLLOW_ON)
+        {
+            return true;
+        }
+    }
+    else
+    {
+        if (dist_front_cm < traversal::STOP_DISTANCE_THRESHOLD_WALL_FOLLOW_OFF)
+        {
+            return true;
+        }
     }
     return false;
+}
+
+double calculate_delWref(double dist_diff) 
+{
+    wall_control::integral = wall_control::integral + dist_diff * drive_control::SAMPLING_PERIOD;
+    double derivative = (dist_diff - wall_control::prev_error) / drive_control::SAMPLING_PERIOD;
+    double delWref = wall_control::Kp * dist_diff + wall_control::Ki * wall_control::integral + wall_control::Kd * derivative;
+    wall_control::prev_error = delWref;
+    return delWref;
 }

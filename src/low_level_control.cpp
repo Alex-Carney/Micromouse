@@ -1,6 +1,5 @@
 #include "low_level_control.h"
 #include "ArduinoMotorShieldR3.h"
-#include "BasicLinearAlgebra.h"
 #include "CircularBuffer.h"
 #include "curve_fitting.h"
 #include "MotorCommand.h"
@@ -57,6 +56,10 @@ namespace ll_control
     const double c = 1.18 * 0.0032; //.002463; // coefficient for e[k-1]
     const double d = 1.18 * -.2484; //-.1912; // coefficient for e[k-2]
     const double e = -.8182;        // coefficient for u[k-2]
+
+    const double ERROR_TOLERANCE = 0.05;
+
+    const double EXTRA_COMPENSATION = 1.2;
   }
 
   MotorCommand compensateMousePosition(
@@ -90,7 +93,7 @@ namespace ll_control
 
     // print out the error values, motor1_values[1] and motor2_values[1]
 
-    if (abs(motor1_values[1]) < .1 && abs(motor2_values[1]) < .1)
+    if (abs(motor1_values[1]) < position_compensation::ERROR_TOLERANCE && abs(motor2_values[1]) < position_compensation::ERROR_TOLERANCE)
     {
       command.next_state = true;
     }
@@ -154,7 +157,7 @@ namespace ll_control
 
     MotorCommand command;
     command.motor1_pwm = getU(motor1_values[2]);
-    command.motor2_pwm = getU(motor2_values[2]);
+    command.motor2_pwm = getU(motor2_values[2]) * position_compensation::EXTRA_COMPENSATION;
     command.next_state = false;
 
     return command;

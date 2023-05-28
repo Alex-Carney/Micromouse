@@ -23,10 +23,15 @@ PositionSensor::~PositionSensor()
     delete[] _coefficients;
 }
 
-float PositionSensor::readDistanceCM()
+float PositionSensor::readDistanceCM(int num_averages)
 {
-    int analogValue = analogRead(_pin);
-    float distance = _coefficients[0] * pow(analogValue, _coefficients[1]);
+    float distance = 0;
+    for (int i = 0; i < num_averages; i++)
+    {
+        distance += readDistanceRaw();
+    }
+    distance /= num_averages;
+    distance = _coefficients[0] * pow(distance, _coefficients[1]);
     return distance;
 }
 
