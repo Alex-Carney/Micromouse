@@ -85,7 +85,7 @@ int MazeTraversal::traverse(int path_right, int path_left, int path_forward, int
     int dest_row; // for backtracking
     int dest_col; // for backtracking
     int order = 1; // for printing the path
-    int direction = 0; // which direction to turn. 1 = forward, 2 = right, 3 = left, 4 = back
+    int direction = 0; // which direction to turn. 1 = North, 2 = East, 3 = West, 4 = South
     unsigned long initial_time;
 
     bool backtrack = true;
@@ -293,9 +293,149 @@ int MazeTraversal::traverse(int path_right, int path_left, int path_forward, int
     printStack();
     printPathStack();  
     
+    int mdirection = convertToMouseOrientation(direction);
+    Serial.print("My orientation: ");
+    Serial.print(direction);
+    printDirection(orientation);
+    Serial.print("Going to: ");
+    printDirection(mdirection);
+    updateMouseOrientation(mdirection);
 
     return direction;
 
+}
+
+
+
+
+int MazeTraversal::getMouseOrientation(){
+    return orientation;
+}
+
+// here d is the direction in the mouse frame
+void MazeTraversal::updateMouseOrientation(int d){
+    if (orientation == 1){
+        orientation = d;
+    }else if (orientation == 2){
+        if (d == 1){
+            orientation = 2;
+        }else if (d == 2){
+            orientation = 4;
+        }else if (d == 3){
+            orientation = 1;
+        }else if (d == 4){
+            orientation = 3;
+        }
+    } else if (orientation == 3){
+        if (d == 1){
+            orientation = 3;
+        }else if (d == 2){
+            orientation = 1;
+        }else if (d == 3){
+            orientation = 4;
+        }else if (d == 4){
+            orientation = 2;
+        }
+    } else if (orientation == 4){
+        if (d == 1){
+            orientation = 4;
+        }else if (d == 2){
+            orientation = 3;
+        }else if (d == 3){
+            orientation = 2;
+        }else if (d == 4){
+            orientation = 1;
+        }     
+    }
+}
+
+
+// 1 = North, 2 = East, 3 = West, 4 = South
+int MazeTraversal::convertToMouseOrientation(int d){
+    // if mouse pointing to the south of the logical maze
+    if (orientation == 4){
+        if (d == 1){
+            return 4;
+        }else if (d == 2){
+            return 3;
+        }else if (d == 3){
+            return 2;
+        }else if (d == 4){
+            return 1;
+        }
+    } 
+    // if mouse is pointing to the north of the logical maze (default)
+    else if (orientation == 1){
+        return d;
+    } 
+    // if mouse is pointing to the east of the logical maze
+    else if (orientation == 2){
+        if (d == 1){
+            return 3;
+        }else if (d == 2){
+            return 1;
+        }else if (d == 3){
+            return 4;
+        }else if (d == 4){
+            return 2;
+        }
+    } 
+    // if the mouse is pointing to the west of the logical maze
+    else if (orientation == 3){
+        if (d == 1){
+            return 2;
+        }else if (d == 2){
+            return 4;
+        }else if (d == 3){
+            return 1;
+        }else if (d == 4){
+            return 3;
+        }
+    }
+
+    return 10;
+
+}
+
+
+MazeTraversal::Path MazeTraversal::convertToMazeOrientation(int path_right, int path_left, int path_forward, int path_back){
+
+    Path possible_paths = {path_right, path_left, path_forward, path_back};
+
+    if (orientation == 1){
+        return possible_paths;
+    } else if (orientation == 2){
+        possible_paths.back = path_right;
+        possible_paths.forward = path_left;
+        possible_paths.right = path_forward;
+        possible_paths.left = path_back;
+    } else if (orientation == 3){
+        possible_paths.forward = path_right;
+        possible_paths.back = path_left;
+        possible_paths.left = path_forward;
+        possible_paths.right = path_back;
+    } else if (orientation == 4){
+        possible_paths.left = path_right;
+        possible_paths.right = path_left;
+        possible_paths.back = path_forward;
+        possible_paths.forward = path_back;
+    }
+
+    return possible_paths;
+    
+}
+
+int MazeTraversal::getReverseDirection(int d){
+    if (d == 1){
+        return 4;
+    }else if (d == 2){
+        return 3;
+    }else if (d == 3){
+        return 2;
+    }else if (d == 4){
+        return 1;
+    }
+    return 0;
 }
 
 
@@ -319,6 +459,91 @@ bool MazeTraversal::logicTraverse(int startRow, int startCol, int endRow, int en
 
     return dfs(startCell, endCell);
 }
+
+
+
+
+
+void MazeTraversal::push(Cell cell)
+{
+    stack[top++] = cell;
+}
+
+MazeTraversal::Cell MazeTraversal::pop()
+{
+    return stack[--top];
+}
+
+void MazeTraversal::path_push(int d)
+{
+    path_stack[path_top++] = d;
+}
+
+int MazeTraversal::path_pop()
+{
+    return path_stack[--path_top];
+}
+
+
+
+
+
+// TODO: Different handling when mouse is ready. End cell is not known. Need sensor data.
+bool MazeTraversal::isDestination(int row, int col)
+{   
+    if (row == 30 && col == 32)
+    {
+        return true;
+    }
+    // cell.row == endRow && cell.col == endCol;
+    return false;
+}
+
+
+
+
+
+// void MazeTraversal::resizeVisited(int newNumRows, int newNumCols)
+// {
+//     // Allocate memory for new visited array
+//     bool **newVisited = new bool *[newNumRows];
+//     for (int i = 0; i < newNumRows; i++)
+//     {
+//         newVisited[i] = new bool[newNumCols];
+//         for (int j = 0; j < newNumCols; j++)
+//         {
+//             newVisited[i][j] = false;
+//         }
+//     }
+
+//     // Copy values from old visited array to new visited array
+//     for (int i = 0; i < numRows; i++)
+//     {
+//         for (int j = 0; j < numCols; j++)
+//         {
+//             newVisited[i][j] = visited[i][j];
+//         }
+//     }
+
+//     // Deallocate memory for old visited array
+//     for (int i = 0; i < numRows; i++)
+//     {
+//         delete[] visited[i];
+//     }
+//     delete[] visited;
+
+//     // Resize stack to match new size of visited array
+//     Cell *newStack = new Cell[newNumRows * newNumCols];
+//     memcpy(newStack, stack, numRows * numCols * sizeof(Cell));
+//     delete[] stack;
+//     stack = newStack;
+
+//     // Set member variables to new values
+//     visited = newVisited;
+//     numRows = newNumRows;
+//     numCols = newNumCols;
+// }
+
 
 /* 
     Stack implementation. Written in C++ to use C++ libs. 
@@ -409,94 +634,6 @@ void MazeTraversal::Clean(){
 
 
 
-void MazeTraversal::push(Cell cell)
-{
-    stack[top++] = cell;
-}
-
-MazeTraversal::Cell MazeTraversal::pop()
-{
-    return stack[--top];
-}
-
-void MazeTraversal::path_push(int d)
-{
-    path_stack[path_top++] = d;
-}
-
-int MazeTraversal::path_pop()
-{
-    return path_stack[--path_top];
-}
-
-
-
-
-
-// TODO: Different handling when mouse is ready. End cell is not known. Need sensor data.
-bool MazeTraversal::isDestination(int row, int col)
-{   
-    if (row == 30 && col == 32)
-    {
-        return true;
-    }
-    // cell.row == endRow && cell.col == endCol;
-    return false;
-}
-
-
-
-
-
-// void MazeTraversal::resizeVisited(int newNumRows, int newNumCols)
-// {
-//     // Allocate memory for new visited array
-//     bool **newVisited = new bool *[newNumRows];
-//     for (int i = 0; i < newNumRows; i++)
-//     {
-//         newVisited[i] = new bool[newNumCols];
-//         for (int j = 0; j < newNumCols; j++)
-//         {
-//             newVisited[i][j] = false;
-//         }
-//     }
-
-//     // Copy values from old visited array to new visited array
-//     for (int i = 0; i < numRows; i++)
-//     {
-//         for (int j = 0; j < numCols; j++)
-//         {
-//             newVisited[i][j] = visited[i][j];
-//         }
-//     }
-
-//     // Deallocate memory for old visited array
-//     for (int i = 0; i < numRows; i++)
-//     {
-//         delete[] visited[i];
-//     }
-//     delete[] visited;
-
-//     // Resize stack to match new size of visited array
-//     Cell *newStack = new Cell[newNumRows * newNumCols];
-//     memcpy(newStack, stack, numRows * numCols * sizeof(Cell));
-//     delete[] stack;
-//     stack = newStack;
-
-//     // Set member variables to new values
-//     visited = newVisited;
-//     numRows = newNumRows;
-//     numCols = newNumCols;
-// }
-
-
-
-
-
-
-
-
-
 void MazeTraversal::printCell(Cell cell){
     Serial.print("row: ");
     Serial.print(cell.row - numRows/2);
@@ -507,28 +644,17 @@ void MazeTraversal::printCell(Cell cell){
 
 void MazeTraversal::printDirection(int d){
     if (d == 1){
-        Serial.println("Forward");
+        Serial.println("North");
     }else if (d == 2){
-        Serial.println("Right");
+        Serial.println("East");
     }else if (d == 3){
-        Serial.println("Left");
+        Serial.println("West");
     }else if (d == 4){
-        Serial.println("Back");
+        Serial.println("South");
     }
 }
 
-int MazeTraversal::getReverseDirection(int d){
-    if (d == 1){
-        return 4;
-    }else if (d == 2){
-        return 3;
-    }else if (d == 3){
-        return 2;
-    }else if (d == 4){
-        return 1;
-    }
-    return 0;
-}
+
 
 void MazeTraversal::printVisited(){
     int r = numRows/2 + 8;

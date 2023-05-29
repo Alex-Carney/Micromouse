@@ -22,6 +22,14 @@ public:
         int row;
         int col;
     };
+
+    struct Path
+    {
+        int right;
+        int left;
+        int forward;
+        int back;
+    };
     // Constructor
     MazeTraversal(int numRows, int numCols);
     // Methods
@@ -29,11 +37,11 @@ public:
     int traverse(int startRow, int startCol, int endRow, int endCol);
     // For maze given as an array
     bool logicTraverse(int startRow, int startCol, int endRow, int endCol);
-
     void printDirection(int d);
 
     int state = 0; // 0 = traverse. 1 = backtrack.
-    Cell position;  
+    Cell position;
+    int orientation = 4; // 1 = North, 2 = East, 3 = West, 4 = South
 
 private:
     /* Here we assume the maze is given as a 2D matrix for demonstration purposes.
@@ -67,6 +75,10 @@ private:
  
 
     int getReverseDirection(int d);
+    int getMouseOrientation();
+    void updateMouseOrientation(int d);
+    struct Path convertToMazeOrientation(int path_right, int path_left, int path_forward, int path_back);
+    int convertToMouseOrientation(int d);
 
 
     // free memory
