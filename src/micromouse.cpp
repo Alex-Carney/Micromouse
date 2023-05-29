@@ -365,6 +365,8 @@ void loop()
             }
 
             // Calculate Del W_ref from Del X
+            Serial.print("DIst diff is ");
+            Serial.println(dist_diff);
             double delWRef = wall_control::Kp * dist_diff;
             //double delWRef = calculate_delWref(dist_diff);
 
