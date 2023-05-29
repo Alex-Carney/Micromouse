@@ -61,7 +61,7 @@ float sensor2_coefficients[] = {1.18e4, -1.138};
 PositionSensor sensor_marks((int)A11, sensor2_coefficients);
 float sensor3_coefficients[] = {1.3e4, -1.149};
 PositionSensor sensor_big_circle((int)A9, sensor3_coefficients);
-int NUM_SAMPLES = 10;
+int NUM_SAMPLES = 15;
 
 // TODO: Majd
 int maze[8][10] = {
@@ -74,15 +74,15 @@ int maze[8][10] = {
     {1, 0, 1, 0, 1, 1, 0, 0, 0, 1},
     {1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
 };
-MazeTraversal mazeTraversal(8, 10, &maze[0][0]);
+//MazeTraversal mazeTraversal(8, 10, &maze[0][0]);
 namespace traversal
 {
     // Constants for stopping
     const int PATH_DISTANCE_DIFFERENTIAL_THRESHOLD = 10; // (cm) If the difference in distance is greater than this, it's an intersection
-    const int STOP_DISTANCE_THRESHOLD_WALL_FOLLOW_OFF = 25; // (cm) Distance threshold for stopping at a wall (front only)
-    const int STOP_DISTANCE_THRESHOLD_WALL_FOLLOW_ON = 22;  // (cm) Distance threshold for stopping at a wall (front only)
-    const int INTERSECTION_WALK_DISTANCE = 12;           // [Default = 15] (cm) Distance to walk once intersection is found
-    const int DESIRED_WALL_DIST = 5;                    // (cm) Distance to keep from wall, when a front wall is present
+    const int STOP_DISTANCE_THRESHOLD_WALL_FOLLOW_OFF = 20; // (cm) Distance threshold for stopping at a wall (front only)
+    const int STOP_DISTANCE_THRESHOLD_WALL_FOLLOW_ON = 20;  // (cm) Distance threshold for stopping at a wall (front only)
+    const int INTERSECTION_WALK_DISTANCE = 11;           // [Default = 15] (cm) Distance to walk once intersection is found
+    const int DESIRED_WALL_DIST = 10;                    // (cm) Distance to keep from wall, when a front wall is present
 
     // Constants for turning
     const int VALID_PATH_THRESHOLD = 25; // (cm) If the distance to the left,right,forward wall is greater than this, it's a valid path
@@ -236,7 +236,7 @@ void setup()
     mySensor.setUpdateMode(MANUAL);                 // The default is AUTO. Changing to manual requires calling the relevant update functions prior to calling the read functions
 
     // Traversal
-    mazeTraversal.initilizeTraversal();
+    //mazeTraversal.initilizeTraversal();
 
 // Peripheral Initialization
     Serial.begin(115200); // Initialize the Serial Port to view information on the Serial Monitor
@@ -298,14 +298,18 @@ void loop()
             // md.setM2Speed(0);
 
             // State transition logic: Record distances right, left forward.
-            traversal::pre_distance_right = sensor_mini_right.readDistanceCM();
-            traversal::pre_distance_left = sensor_marks.readDistanceCM();
+            traversal::pre_distance_right = sensor_mini_right.readDistanceCMMedian();
+            traversal::pre_distance_left = sensor_marks.readDistanceCMMedian();
 
             isFirstStateIteration = false;
             wall_control::time_started_driving = micros();
             wall_control::control_based_on_wall = false;
 
             drive_control::ramp_idx = drive_control::MAX_RAMP_IDX;
+
+            // Reset buffers
+            drive_control::control_buffer_m1.clear();
+            drive_control::control_buffer_m2.clear();
         }
 
         newTime = micros();
@@ -329,12 +333,12 @@ void loop()
             }
 
             // Measure distances to both walls, in CM
-            float dist_left_cm = sensor_mini_right.readDistanceCM(NUM_SAMPLES);
-            float dist_right_cm = sensor_marks.readDistanceCM(NUM_SAMPLES);
+            float dist_left_cm = sensor_mini_right.readDistanceCMMedian(NUM_SAMPLES);
+            float dist_right_cm = sensor_marks.readDistanceCMMedian(NUM_SAMPLES);
             float dist_diff = dist_left_cm - dist_right_cm;
 
             // Measure front distance for later
-            float dist_front_cm = sensor_big_circle.readDistanceCM(NUM_SAMPLES);
+            float dist_front_cm = sensor_big_circle.readDistanceCMMedian(NUM_SAMPLES);
             bool wall = isWall(dist_front_cm, wall_control::control_based_on_wall);
             // Majd version
             //bool intersection = isIntersection(dist_left_cm, dist_right_cm);
@@ -442,13 +446,17 @@ void loop()
 
             isFirstStateIteration = false;
 
+            // Reset buffers
+            pos_control::control_buffer_m1.clear();
+            pos_control::control_buffer_m2.clear();
+
 // if state delay
 #if STATE_DELAY == 1
             md.setM1Speed(0);
             md.setM2Speed(0);
             delay(STATE_DELAY_VALUE);
 #endif
-            double curr_pos_from_wall = sensor_big_circle.readDistanceCM(2 * NUM_SAMPLES);
+            double curr_pos_from_wall = sensor_big_circle.readDistanceCMMedian(2 * NUM_SAMPLES);
             double pos_to_move_rad = ((curr_pos_from_wall - traversal::DESIRED_WALL_DIST) * 2 * M_PI) / WHEEL_CIRCUMFERENCE;
             if (pos_control::stop_mode == pos_control::StopMode::WALL_PRESENT)
             {
@@ -499,7 +507,14 @@ void loop()
                 Serial.print("Zero ESS");
                 #endif
 
-                MACHINE_STATE = MachineState::LOGIC;
+                // check distance in front
+                double dist = sensor_big_circle.readDistanceCMMedian(2 * NUM_SAMPLES);
+                if (abs(dist - traversal::DESIRED_WALL_DIST) > 1 && pos_control::stop_mode == pos_control::StopMode::WALL_PRESENT) {
+                    // go back to delecerating
+                    MACHINE_STATE = MachineState::DECELERATING;
+                } else {
+                    MACHINE_STATE = MachineState::LOGIC;
+                }
                 isFirstStateIteration = true;
             }
         }
@@ -512,9 +527,9 @@ void loop()
         delay(STATE_DELAY_VALUE);
 #endif
         // Check what directions are valid
-        traversal::path_left = sensor_mini_right.readDistanceCM(NUM_SAMPLES) > traversal::VALID_PATH_THRESHOLD ? 1 : 0;
-        traversal::path_right = sensor_marks.readDistanceCM(NUM_SAMPLES) > traversal::VALID_PATH_THRESHOLD ? 1 : 0;
-        traversal::path_forward = sensor_big_circle.readDistanceCM(NUM_SAMPLES) > traversal::VALID_PATH_THRESHOLD ? 1 : 0;
+        traversal::path_left = sensor_mini_right.readDistanceCMMedian(NUM_SAMPLES) > traversal::VALID_PATH_THRESHOLD ? 1 : 0;
+        traversal::path_right = sensor_marks.readDistanceCMMedian(NUM_SAMPLES) > traversal::VALID_PATH_THRESHOLD ? 1 : 0;
+        traversal::path_forward = sensor_big_circle.readDistanceCMMedian(NUM_SAMPLES) > traversal::VALID_PATH_THRESHOLD ? 1 : 0;
 
         #if DEBUG_MODE == 1
         Serial.print("Forward");
@@ -582,6 +597,10 @@ void loop()
             turning::encoder3Val_start_m2 = 0;
 
             isFirstStateIteration = false;
+            
+            // Clear buffers
+            turning::control_buffer_m1.clear();
+            turning::control_buffer_m2.clear();
 
 // TODO: Should we remove this?
 #if STATE_DELAY == 1
@@ -603,12 +622,12 @@ void loop()
             switch (turning::turn_direction)
             {
             case turning::TurnDirection::LEFT:
-                turning::position_reference_left = -turning::SINGLE_WHEEL_POS_REFERENCE;
-                turning::position_reference_right = turning::SINGLE_WHEEL_POS_REFERENCE;
+                turning::position_reference_left = -.95 * turning::SINGLE_WHEEL_POS_REFERENCE;
+                turning::position_reference_right = .95 * turning::SINGLE_WHEEL_POS_REFERENCE;
                 break;
             case turning::TurnDirection::RIGHT:
-                turning::position_reference_left = .9 * turning::SINGLE_WHEEL_POS_REFERENCE;
-                turning::position_reference_right = -.9 * turning::SINGLE_WHEEL_POS_REFERENCE;
+                turning::position_reference_left = .95 * turning::SINGLE_WHEEL_POS_REFERENCE;
+                turning::position_reference_right = -.95 * turning::SINGLE_WHEEL_POS_REFERENCE;
                 break;
             case turning::TurnDirection::FORWARD:
                 turning::position_reference_left = 0;
@@ -679,7 +698,7 @@ bool isIntersection(float dist_left_cm, float dist_right_cm)
     if (abs(dist_left_cm - traversal::pre_distance_left) > traversal::PATH_DISTANCE_DIFFERENTIAL_THRESHOLD)
     {
         // double check its not a glitch reading
-        if (abs(sensor_marks.readDistanceCM() - traversal::pre_distance_left) > traversal::PATH_DISTANCE_DIFFERENTIAL_THRESHOLD)
+        if (abs(sensor_marks.readDistanceCMMedian() - traversal::pre_distance_left) > traversal::PATH_DISTANCE_DIFFERENTIAL_THRESHOLD)
         {
             traversal::pre_distance_left = dist_left_cm;
             return true;
@@ -688,7 +707,7 @@ bool isIntersection(float dist_left_cm, float dist_right_cm)
     if (abs(dist_right_cm - traversal::pre_distance_right) > traversal::PATH_DISTANCE_DIFFERENTIAL_THRESHOLD)
     {
         // double check its not a glitch reading
-        if (abs(sensor_mini_right.readDistanceCM() - traversal::pre_distance_right) > traversal::PATH_DISTANCE_DIFFERENTIAL_THRESHOLD)
+        if (abs(sensor_mini_right.readDistanceCMMedian() - traversal::pre_distance_right) > traversal::PATH_DISTANCE_DIFFERENTIAL_THRESHOLD)
         {
             traversal::pre_distance_right = dist_right_cm;
             return true;

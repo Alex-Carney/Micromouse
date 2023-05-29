@@ -9,7 +9,7 @@
 #define SPEED_MODE 1
 // macro for delay between states
 #define STATE_DELAY 1
-#define STATE_DELAY_VALUE 200
+#define STATE_DELAY_VALUE 50
 // macro to switch between position compensators
 #define POS_MODE 1
 

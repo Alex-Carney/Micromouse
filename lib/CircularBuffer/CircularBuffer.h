@@ -78,6 +78,17 @@ T getValue(int stepsBack, int valueIndex)
     return buffer[(index - stepsBack + steps) % steps][valueIndex];
 }
 
+void clear()
+{
+    for (int i = 0; i < steps; i++)
+    {
+        for (int j = 0; j < values; j++)
+        {
+            buffer[i][j] = 0;
+        }
+    }
+}
+
 void print() const
     {
         for (int i = 0; i < steps; i++)
