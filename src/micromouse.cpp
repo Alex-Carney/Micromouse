@@ -134,7 +134,7 @@ namespace drive_control
     const int SAMPLING_PERIOD = 40000; // Sampling period in microseconds
     const double MAX_SPEED_RADS = 3;   // Maximum speed in radians per second
 #endif
-    const double MAX_SPEED_AFTER_WALL_COMPENSATION = MAX_SPEED_RADS + 1;
+    const double MAX_SPEED_AFTER_WALL_COMPENSATION = MAX_SPEED_RADS + 5;
     // Globals
     long motor1_pos;
     long motor2_pos;
@@ -167,9 +167,15 @@ namespace wall_control
     double integral = 0;
 
     // Gains:
-    const double Kp = 0.05;
-    const double Ki = 0.0;
-    const double Kd = 0.0;
+    const double Kp = 0.1;
+    const double Ki = 0.01;
+    const double Kd = 1.0;
+    const double Kd2 = 0.5;
+
+    // Control buffer
+    CircularBuffer<float> previous_wall_deltas(5, 2); // 2 steps back. 3 values per step
+    const int NUM_PREV_WALL_DISTS = 5;
+    const int DEL_REF_TOO_HIGH = 6;
 }
 
 // Global variables for TURNING
@@ -364,10 +370,38 @@ void loop()
                 break; // Cancel this state early! Don't compensate
             }
 
-            // Calculate Del W_ref from Del X
-            Serial.print("DIst diff is ");
+            // wrap left and right distances into a list
+            float dists[2] = {dist_left_cm, dist_right_cm};
+            // store the current distance in the buffer
+            wall_control::previous_wall_deltas.addValues(dists);
+            float deriv_left = dist_left_cm - wall_control::previous_wall_deltas.getValue(wall_control::NUM_PREV_WALL_DISTS - 1, 0);
+            float deriv_right = dist_right_cm - wall_control::previous_wall_deltas.getValue(wall_control::NUM_PREV_WALL_DISTS - 1, 1);
+
+            float fast_deriv_left = dist_left_cm - wall_control::previous_wall_deltas.getValue(1, 0);
+            float fast_deriv_right = dist_right_cm - wall_control::previous_wall_deltas.getValue(1, 1);
+
+            float int_left = 0;
+            float int_right = 0;
+            for (int i = 0; i < wall_control::NUM_PREV_WALL_DISTS; i++)
+            {
+                int_left += wall_control::previous_wall_deltas.getValue(i, 0);
+                int_right += wall_control::previous_wall_deltas.getValue(i, 1);
+            }
+            // print values
+            Serial.print("dist_diff: ");
             Serial.println(dist_diff);
-            double delWRef = wall_control::Kp * dist_diff;
+            Serial.print("average dist diff: ");
+            Serial.println(deriv_left - deriv_right);
+
+            double delWRef = wall_control::Kp * dist_diff + wall_control::Kd * (deriv_left - deriv_right) + wall_control::Kd2 * (fast_deriv_left - fast_deriv_right) + wall_control::Ki * (int_left - int_right);
+            // if del W ref is bigger than 5 set it to 0
+            if (abs(delWRef) > wall_control::DEL_REF_TOO_HIGH)
+            {
+                delWRef = 0;
+            }
+
+            Serial.print("DEL W REF IS: ");
+            Serial.println(delWRef);
             //double delWRef = calculate_delWref(dist_diff);
 
             if(drive_control::ramp_idx > 1.0) {
