@@ -73,12 +73,14 @@ bool MazeTraversal::initilizeTraversal(){
     push(startCell);
     path_top = 0;
     path_push({North, 1});
+    cur_row = numRows/2;
+    cur_col = numCols/2;
 
     return true;
 }
 
 
-int MazeTraversal::traverse(int path_right, int path_left, int path_forward, int path_back){
+int MazeTraversal::traverse(int path_right, int path_left, int path_forward, int path_back, long encoder_val){
 
     // Initialize variables
 
@@ -89,11 +91,14 @@ int MazeTraversal::traverse(int path_right, int path_left, int path_forward, int
     int path_north, path_east, path_west, path_south;
     pathCell currentCell;
 
+
     bool backtrack = true;
 
     Serial.println("####################################Starting loop: ");
     Serial.print("    My orientaion is: ");
     printDirection(orientation);
+
+    int steps = encoder_val;
 
 
     switch (state)
@@ -137,8 +142,10 @@ int MazeTraversal::traverse(int path_right, int path_left, int path_forward, int
                     direction = West;
                 }
 
+                
+
                 if (!backtrack){
-                    path_stack[path_top-1].visited = 1;
+                    path_stack[path_top-1].visited = 1;    
                 }else{
                     Serial.println("Backtracking first#########################################");
                     // TODO: checkk if turn automatically
@@ -173,6 +180,41 @@ int MazeTraversal::traverse(int path_right, int path_left, int path_forward, int
             break;
     }
 
+    int i;
+    if (backtrack == true || state == 1)
+        i = 0;
+    else 
+        i = 1;
+    if (orientation == North){
+        while (i <= steps){
+            visited[cur_row-i][cur_col] = North;
+            i++;
+        }
+        cur_row -= steps;
+        // visited[cur_row][cur_col] = North;
+    }else if (orientation == East){
+        while (i <= steps){
+            visited[cur_row][cur_col+i] = East;
+            i++;
+        }
+        cur_col += steps;
+        // visited[cur_row][cur_col] = East;
+    }else if (orientation == South){
+        while (i <= steps){
+            visited[cur_row+i][cur_col] = South;
+            i++;
+        }
+        cur_row += steps;
+        // visited[cur_row][cur_col] = South;
+    }else if (orientation == West){
+        while (i <= steps){
+            visited[cur_row][cur_col-i] = West;
+            i++;
+        }
+        cur_col -= steps;
+        // visited[cur_row][cur_col] = West;
+    }
+
 
     
 
@@ -181,6 +223,7 @@ int MazeTraversal::traverse(int path_right, int path_left, int path_forward, int
     // path_push(direction);
 
     printPathStack();  
+    printVisited();
     int mdirection = convertToMouseOrientation(direction);
     Serial.print("Going to: ");
     printMouseDirection(mdirection);
@@ -573,6 +616,14 @@ void MazeTraversal::printVisited(){
         for (int j = 0; j < c; j++){
             if (visited[i][j] != 5)
                 Serial.print(visited[i][j]);
+                // if (visited[i][j] == North)
+                //     Serial.print("N");
+                // else if (visited[i][j] == East)
+                //     Serial.print("E");
+                // else if (visited[i][j] == West)
+                //     Serial.print("W");
+                // else if (visited[i][j] == South)
+                //     Serial.print("S");
             else
                 Serial.print(" ");
             Serial.print(" ");

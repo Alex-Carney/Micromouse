@@ -47,10 +47,13 @@ public:
     MazeTraversal(int numRows, int numCols);
     // Methods
     bool initilizeTraversal();
-    int traverse(int startRow, int startCol, int endRow, int endCol);
+    int traverse(int startRow, int startCol, int endRow, int endCol, long encoder_val);
     // For maze given as an array
     bool logicTraverse(int startRow, int startCol, int endRow, int endCol);
     void printDirection(int d);
+
+    long pre_encoder_val = 0;
+    int cur_row, cur_col;
     
 
     int state = 0; // 0 = traverse. 1 = backtrack.

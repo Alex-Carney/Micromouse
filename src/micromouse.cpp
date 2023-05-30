@@ -87,6 +87,10 @@ namespace traversal
     float pre_distance_right = 0;
     int direction = 0; // which direction to turn. 1 = forward, 2 = right, 3 = left, 4 = back
 
+    long encoder_val = 0; // to keep track of steps walked
+
+
+
 }
 
 namespace pos_control
@@ -378,11 +382,13 @@ void loop()
                 int_left += wall_control::previous_wall_deltas.getValue(i, 0);
                 int_right += wall_control::previous_wall_deltas.getValue(i, 1);
             }
+            #if DEBUG_MODE == 1
             // print values
             Serial.print("dist_diff: ");
             Serial.println(dist_diff);
             Serial.print("average dist diff: ");
             Serial.println(deriv_left - deriv_right);
+            #endif
 
             double delWRef = wall_control::Kp * dist_diff + wall_control::Kd * (deriv_left - deriv_right) + wall_control::Kd2 * (fast_deriv_left - fast_deriv_right) + wall_control::Ki * (int_left - int_right);
             // if del W ref is bigger than 5 set it to 0
@@ -391,8 +397,10 @@ void loop()
                 delWRef = 0;
             }
 
+            #if DEBUG_MODE == 1
             Serial.print("DEL W REF IS: ");
             Serial.println(delWRef);
+            #endif
             // double delWRef = calculate_delWref(dist_diff);
 
             if (drive_control::ramp_idx > 1.0)
@@ -489,10 +497,13 @@ void loop()
             {
                 // Compensate distance based on wall
                 pos_control::position_reference = pos_to_move_rad;
+                #if DEBUG_MODE == 1
+
                 Serial.print("There is a wall this far away: ");
                 Serial.println(curr_pos_from_wall);
                 Serial.print("Because there is a wall, I am moving: ");
                 Serial.println(pos_to_move_rad);
+                #endif
             }
             else
             {
@@ -570,7 +581,8 @@ void loop()
         Serial.println(traversal::path_right);
 #endif
 
-        traversal::direction = mazeTraversal.traverse(traversal::path_right, traversal::path_left, traversal::path_forward, 0);
+        traversal::encoder_val = encoder::getEncoderValue(ENCODER_M1);
+        traversal::direction = mazeTraversal.traverse(traversal::path_right, traversal::path_left, traversal::path_forward, 0, traversal::encoder_val);
         
         if (traversal::direction == 3)
         {
