@@ -85,7 +85,7 @@ private:
     pathCell path_pop();
 
     
-    bool isDestination(int row, int col);
+    bool isDestination();
     bool dfs(Cell currentCell, Cell endCell); // For maze given as array
     void resizeVisited(int newNumRows, int newNumCols);
 

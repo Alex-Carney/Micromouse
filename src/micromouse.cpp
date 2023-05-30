@@ -65,7 +65,7 @@ int NUM_SAMPLES = 15;
 
 // TODO: Majd
 
-MazeTraversal mazeTraversal(8, 10);
+MazeTraversal mazeTraversal(50, 50);
 namespace traversal
 {
     // Constants for stopping
@@ -164,7 +164,7 @@ namespace wall_control
     // Gains:
     const double Kp = 0.1;
     const double Ki = 0.01;
-    const double Kd = 1.0;
+    const double Kd = 1;
     const double Kd2 = 0.5;
 
     // Control buffer
@@ -285,13 +285,15 @@ void loop()
 
     case MachineState::DRIVING:
         if (isFirstStateIteration)
-        {
+        {   
+
             // Serial.println("Got into driving state");
             //  Initialize T and X
             oldTime = micros();
             drive_control::start_time = oldTime;
             lastSampleTime = oldTime;
             drive_control::encoder3Val_start_m1 = encoder::getEncoderValue(ENCODER_M1); // Starting value for the encoder
+            traversal::encoder_val = drive_control::encoder3Val_start_m1;
             drive_control::encoder3Val_start_m2 = encoder::getEncoderValue(ENCODER_M2);
 
             // Stop wheels just in case
@@ -318,6 +320,7 @@ void loop()
         if (((newTime - lastSampleTime)) >= drive_control::SAMPLING_PERIOD)
         {
             drive_control::motor1_pos = encoder::getEncoderValue(ENCODER_M1);
+            traversal::encoder_val = drive_control::motor1_pos;
             drive_control::motor2_pos = encoder::getEncoderValue(ENCODER_M2);
             // Serial.println("Time to sample");
             //  Collect data
@@ -349,9 +352,10 @@ void loop()
             traversal::pre_distance_right = dist_right_cm;
             if ((wall || (intersection && wall_control::control_based_on_wall == true)))
             {
+                
+#if DEBUG_MODE == 1
                 Serial.print("I think there is a wall: ");
                 Serial.println(dist_front_cm);
-#if DEBUG_MODE == 1
                 Serial.println("IM IN HERE!!!");
                 Serial.println("I AM HERE BECAUSE OF A ");
                 Serial.println(wall ? "WALL" : "INTERSECTION");

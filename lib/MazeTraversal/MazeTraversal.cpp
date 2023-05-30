@@ -12,6 +12,8 @@
 
 #include "MazeTraversal.h"
 
+bool first_run = true;
+
 MazeTraversal::MazeTraversal(int numRows, int numCols)
 {
     this->numRows = numRows;
@@ -80,9 +82,15 @@ bool MazeTraversal::initilizeTraversal(){
 }
 
 
+
 int MazeTraversal::traverse(int path_right, int path_left, int path_forward, int path_back, long encoder_val){
 
     // Initialize variables
+
+    if (first_run){
+        first_run = false;
+        pre_encoder_val = encoder_val;
+    }
 
     int order = 1; // for printing the path
     int direction = 0; // which direction to turn. 1 = North, 2 = East, 3 = West, 4 = South
@@ -95,10 +103,23 @@ int MazeTraversal::traverse(int path_right, int path_left, int path_forward, int
     bool backtrack = true;
 
     Serial.println("####################################Starting loop: ");
-    Serial.print("    My orientaion is: ");
-    printDirection(orientation);
+    // Serial.print("    My orientaion is: ");
+    // printDirection(orientation);
 
-    int steps = encoder_val;
+    int steps = encoder_val - pre_encoder_val;
+    if (steps < 0){
+        steps = -1*steps;
+    }
+
+    if (steps < 2000){
+        steps = 2;
+    }else{
+        steps = steps % 1000 > 0 ? steps + 1000 - steps % 1000 : steps - steps % 1000;
+        steps = steps/1000;
+    }
+    pre_encoder_val = encoder_val;
+
+
 
 
     switch (state)
@@ -185,15 +206,20 @@ int MazeTraversal::traverse(int path_right, int path_left, int path_forward, int
         i = 0;
     else 
         i = 1;
+    bool path_crossed = false;
     if (orientation == North){
         while (i <= steps){
-            visited[cur_row-i][cur_col] = North;
+            if (visited[cur_row-i][cur_col] != 0 && i > 0)
+                path_crossed = true;
+            visited[cur_row-i][cur_col] = North;  
             i++;
         }
         cur_row -= steps;
         // visited[cur_row][cur_col] = North;
     }else if (orientation == East){
         while (i <= steps){
+            if (visited[cur_row][cur_col+i] != 0 && i > 0)
+                path_crossed = true;
             visited[cur_row][cur_col+i] = East;
             i++;
         }
@@ -201,6 +227,8 @@ int MazeTraversal::traverse(int path_right, int path_left, int path_forward, int
         // visited[cur_row][cur_col] = East;
     }else if (orientation == South){
         while (i <= steps){
+            if (visited[cur_row+i][cur_col] != 0 && i > 0)
+                path_crossed = true;
             visited[cur_row+i][cur_col] = South;
             i++;
         }
@@ -208,11 +236,22 @@ int MazeTraversal::traverse(int path_right, int path_left, int path_forward, int
         // visited[cur_row][cur_col] = South;
     }else if (orientation == West){
         while (i <= steps){
+            if (visited[cur_row][cur_col-i] != 0 && i > 0)
+                path_crossed = true;
             visited[cur_row][cur_col-i] = West;
             i++;
         }
         cur_col -= steps;
         // visited[cur_row][cur_col] = West;
+    }
+
+    if (state == 0){
+        if (path_crossed){
+            Serial.println("Path crossed");
+        }
+        if (isDestination()){
+            exit(0);
+        }
     }
 
 
@@ -225,8 +264,8 @@ int MazeTraversal::traverse(int path_right, int path_left, int path_forward, int
     printPathStack();  
     printVisited();
     int mdirection = convertToMouseOrientation(direction);
-    Serial.print("Going to: ");
-    printMouseDirection(mdirection);
+    // Serial.print("Going to: ");
+    // printMouseDirection(mdirection);
     updateMouseOrientation(mdirection);
 
     return mdirection;
@@ -417,14 +456,19 @@ MazeTraversal::pathCell MazeTraversal::path_pop()
 
 
 // TODO: Different handling when mouse is ready. End cell is not known. Need sensor data.
-bool MazeTraversal::isDestination(int row, int col)
+bool MazeTraversal::isDestination()
 {   
-    if (row == 30 && col == 32)
-    {
-        return true;
+    bool isDestination = true;
+    for (int i = cur_row; i < cur_row + 3; i++){
+        for (int j = cur_col; j < cur_col + 3; j++){
+            if (visited[i][j] == 0){
+                isDestination = false;
+            }
+        }
     }
-    // cell.row == endRow && cell.col == endCol;
-    return false;
+    return isDestination;
+
+
 }
 
 
