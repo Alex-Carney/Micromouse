@@ -74,7 +74,7 @@ int maze[8][10] = {
     {1, 0, 1, 0, 1, 1, 0, 0, 0, 1},
     {1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
 };
-// MazeTraversal mazeTraversal(8, 10, &maze[0][0]);
+MazeTraversal mazeTraversal(8, 10, &maze[0][0]);
 namespace traversal
 {
     // Constants for stopping
@@ -242,7 +242,7 @@ void setup()
     mySensor.setUpdateMode(MANUAL);                 // The default is AUTO. Changing to manual requires calling the relevant update functions prior to calling the read functions
 
     // Traversal
-    // mazeTraversal.initilizeTraversal();
+    mazeTraversal.initilizeTraversal();
 
     // Peripheral Initialization
     Serial.begin(115200); // Initialize the Serial Port to view information on the Serial Monitor
@@ -579,35 +579,17 @@ void loop()
         Serial.println(traversal::path_right);
 #endif
 
-        // traversal::direction = mazeTraversal.traverse(traversal::path_right, traversal::path_left, traversal::path_forward, 0);
-        // make a decision about which way to turn - MAJD
-        // TODO: Youssef come here
-        // if (traversal::direction == 3)
-        // {
-        //     turning::turn_direction = turning::TurnDirection::LEFT;
-        // }
-        // else if (traversal::direction == 2)
-        // {
-        //     turning::turn_direction = turning::TurnDirection::RIGHT;
-        // }
-        // else if (traversal::direction == 1)
-        // {
-        //     turning::turn_direction = turning::TurnDirection::FORWARD;
-        // }
-        // else
-        // {
-        //     turning::turn_direction = turning::TurnDirection::BACKWARD;
-        // }
-        // make a decision about which way to turn - MAJD
-        if (traversal::path_left == 1)
+        traversal::direction = mazeTraversal.traverse(traversal::path_right, traversal::path_left, traversal::path_forward, 0);
+        
+        if (traversal::direction == 3)
         {
             turning::turn_direction = turning::TurnDirection::LEFT;
         }
-        else if (traversal::path_right == 1)
+        else if (traversal::direction == 2)
         {
             turning::turn_direction = turning::TurnDirection::RIGHT;
         }
-        else if (traversal::path_forward == 1)
+        else if (traversal::direction == 1)
         {
             turning::turn_direction = turning::TurnDirection::FORWARD;
         }
@@ -615,6 +597,24 @@ void loop()
         {
             turning::turn_direction = turning::TurnDirection::BACKWARD;
         }
+
+ 
+        // if (traversal::path_left == 1)
+        // {
+        //     turning::turn_direction = turning::TurnDirection::LEFT;
+        // }
+        // else if (traversal::path_right == 1)
+        // {
+        //     turning::turn_direction = turning::TurnDirection::RIGHT;
+        // }
+        // else if (traversal::path_forward == 1)
+        // {
+        //     turning::turn_direction = turning::TurnDirection::FORWARD;
+        // }
+        // else
+        // {
+        //     turning::turn_direction = turning::TurnDirection::BACKWARD;
+        // }
         // set state to turning
         MACHINE_STATE = MachineState::TURNING;
         isFirstStateIteration = true;
