@@ -33,7 +33,7 @@ MazeTraversal::MazeTraversal(int numRows, int numCols)
         visited[i] = new int [numCols];
         for (int j = 0; j < numCols; j++)
         {
-            visited[i][j] = 0;
+            visited[i][j] = 5;
         }
     }
     
@@ -49,7 +49,7 @@ MazeTraversal::MazeTraversal(int numRows, int numCols)
 
     // in the worst case senario, we explore every possible cell in the 2d array-> stack size = numRows * numCols
     stack = new Cell[numRows * numCols];
-    path_stack = new int[numRows * numCols];
+    path_stack = new pathCell[numRows * numCols];
     top = 0;
     path_top = 0;
 }
@@ -65,13 +65,14 @@ bool MazeTraversal::initilizeTraversal(){
     {
         for (int j = 0; j < numCols; j++)
         {
-            visited[i][j] = 0;
+            visited[i][j] = 5;
         }
     }
     top = 0;
     Cell startCell = {numCols/2, numCols/2}; // assume starting point has corrdinates (row = 0, col = 0)
     push(startCell);
     path_top = 0;
+    path_push({North, 1});
 
     return true;
 }
@@ -80,207 +81,96 @@ bool MazeTraversal::initilizeTraversal(){
 int MazeTraversal::traverse(int path_right, int path_left, int path_forward, int path_back){
 
     // Initialize variables
-    int currentRow;
-    int currentCol;
-    int dest_row; // for backtracking
-    int dest_col; // for backtracking
+
     int order = 1; // for printing the path
     int direction = 0; // which direction to turn. 1 = North, 2 = East, 3 = West, 4 = South
     unsigned long initial_time;
+    int curr_orientation = orientation;
+    int path_north, path_east, path_west, path_south;
+    pathCell currentCell;
 
     bool backtrack = true;
 
+    Serial.println("####################################Starting loop: ");
+    Serial.print("    My orientaion is: ");
+    printDirection(orientation);
+
+
     switch (state)
     {
-    // traversal    
-    case 0:
-        if (top > 0){
-            initial_time = micros();
-            Serial.println("Starting loop: ");
-            Serial.print("    I am at: ");
-            printCell(stack[top-1]);
-            Serial.print("    right:");
-            Serial.println(path_right);
-            Serial.print("    left:");
-            Serial.println(path_left);
-            Serial.print("    forward:");
-            Serial.println(path_forward);
-            Serial.print("    back:");
-            Serial.println(path_back);
-            
-
-            // Pop the top cell from the stack and mark it as visited
-            currentRow = stack[top-1].row;
-            currentCol = stack[top-1].col;            
-            pop();
-            if (visited[currentRow][currentCol] == 1){
-                return 10;
-            }
-            visited[currentRow][currentCol] = 1;
-            numVisited[currentRow][currentCol] = order;
-            order++;
-
-
-            
-
-            // Check if we have reached the end of the maze
-            if (isDestination(currentRow, currentCol)) {
-                Serial.println("Success!");
-                // printNumVisited();
-                // printMaze();
-                return 10;
-                // Maze is solved, exit loop
-            }
-
-            
-
-            /*############ Check adjacent cells and add unvisited ones to the stack ############*/ 
-            // Check cell to the top
-            if (currentRow > 0 && visited[currentRow-1][currentCol] != 1 && path_forward) {
-                push({currentRow-1, currentCol});
-                direction = 1;
-                // Serial.print("  Added top: ");
-                // printCell(stack[top-1]);
-                visited[currentRow-1][currentCol] = 2; // mark as not visited
-                backtrack = false;
-            }
-
-            
-
-            // Check cell to the right
-            if (currentCol < numCols-1 && visited[currentRow][currentCol+1] != 1 && path_right) {
-                push({currentRow, currentCol+1});
-                direction = 2;
-                // Serial.print("    Added right: ");
-                // printCell(stack[top-1]);
-                visited[currentRow][currentCol+1] = 2; // mark as not visited
-                backtrack = false;
-            }
-
-            // Check cell to the bottom
-            if (currentRow < numRows-1 && visited[currentRow+1][currentCol] != 1 && path_back) {
-                push({currentRow+1, currentCol});
-                direction = 4;
-                // Serial.print("    Added bottom: ");
-                // printCell(stack[top-1]);
-                visited[currentRow+1][currentCol] = 2; // mark as not visited
-                backtrack = false;
-            }
-            // Check cell to the left
-            if (currentCol > 0 && visited[currentRow][currentCol-1] != 1 && path_left) {
-                // Add cell to the left
-                push({currentRow, currentCol-1});
-                direction = 3;
-                // Serial.print("    Added left: ");
-                // printCell(stack[top-1]);
-                visited[currentRow][currentCol-1] = 2; // mark as not visited
-                backtrack = false;
-            }
-
-            
-
-
-            //#############3 Backtracking ###############
-            // When adjancent cells are all visisted, backtrack to the top of the stack.
-            if (backtrack){
-                // Serial.println("   ########################## entered Backtracking");
-                int previous_direction = path_pop();
-                direction =  getReverseDirection(previous_direction);
-                state = 1; // switch to backtracking state
-                if (direction == 1){
-                    position = {currentRow - 1, currentCol};
-                }else if (direction == 2){
-                    position = {currentRow, currentCol+1};
-                }else if(direction == 3){
-                    position = {currentRow, currentCol-1};
-                }else if(direction == 4){
-                    position = {currentRow + 1, currentCol};
+        // traversal    
+        case 0:
+            if (path_top > 0){
+                initial_time = micros();
+                
+                // convert to maze frame
+                Path path = convertToMazeOrientation(path_right, path_left, path_forward, path_back);
+                path_east = path.right;
+                path_west = path.left;
+                path_north = path.forward;
+                path_south = path.back;
+                
+                
+                // update path stack
+                if (path_north) {
+                    path_push({North, 0});
+                    backtrack = false;
+                    direction = North;
                 }
-                visited[currentRow][currentCol] = 3; // mark as backtracked                
+
+                if (path_east) {
+                    path_push({East, 0});
+                    backtrack = false;
+                    direction = East;
+                }
+
+                // Check cell to the bottom
+                if (path_south) {
+                    path_push({South, 0});
+                    backtrack = false;
+                    direction = South;
+                }
+                // Check cell to the left
+                if (path_west) {
+                    path_push({West, 0});
+                    backtrack = false;
+                    direction = West;
+                }
+
+                if (!backtrack){
+                    path_stack[path_top-1].visited = 1;
+                }else{
+                    Serial.println("Backtracking first#########################################");
+                    // TODO: checkk if turn automatically
+                    int previous_direction = path_stack[path_top-1].direction;
+                    direction = getReverseDirection(previous_direction);
+                    path_pop();    
+                    state = 1;       
+                }
+
+            }else{
+                return 10;
             }
+            break;
 
-            // Keep track of the path taken
-            if (!backtrack){
-                path_push(direction);
-            }
-
-
+        case 1:
+            Serial.println("########################## Backtracking");
             
-            
-    
-        }else{
-            return 10;
-        }
-        break;
+            currentCell = path_stack[path_top-1];
 
-    case 1:
-        Serial.println("########################## Backtracking");
-        currentRow = position.row;
-        currentCol = position.col;
-        dest_row = stack[top-1].row;
-        dest_col = stack[top-1].col;
+            if (currentCell.visited){
+                path_pop();
+                direction = getReverseDirection(currentCell.direction);
+            }else{
+                path_stack[path_top-1].visited = 1;
+                direction = currentCell.direction;
+                state = 1;
+            }           
 
-        backtrack = true;
-    
-        // Check cell to the top
-        if (currentRow > 0 &&  path_forward) {
-            if (currentRow - 1 == dest_row && currentCol == dest_col){
-                backtrack = false;
-                direction = 1;
-            }
-        }
-
+            break;
         
-
-        // Check cell to the right
-        if (currentCol < numCols-1  && path_right) {
-            if (currentRow == dest_row && currentCol + 1 == dest_col){
-                backtrack = false;
-                direction = 2;
-            }
-
-        }
-
-        // Check cell to the bottom
-        if (currentRow < numRows-1  && path_back) {
-            if (currentRow + 1 == dest_row && currentCol == dest_col){
-                backtrack = false;
-                direction = 4;
-            }
-        }
-        // Check cell to the left
-        if (currentCol > 0 && path_left) {
-            if (currentRow == dest_row && currentCol - 1 == dest_col){
-                backtrack = false;
-                direction = 3;
-            }
-        }
-
-        if (backtrack){
-            int previous_direction = path_pop();
-            direction =  getReverseDirection(previous_direction);
-            if (direction == 1){
-                position = {currentRow - 1, currentCol};
-            }else if (direction == 2){
-                position = {currentRow, currentCol+1};
-            }else if(direction == 3){
-                position = {currentRow, currentCol-1};
-            }else if(direction == 4){
-                position = {currentRow + 1, currentCol};
-            }
-            visited[currentRow][currentCol] = 3; // mark as backtracked    
-                       
-        }else{
-            state = 0;
-            path_push(direction);
-        }
-
-        
-
-        break;
-    
-    default:
-        break;
+        default:
+            break;
     }
 
 
@@ -289,19 +179,14 @@ int MazeTraversal::traverse(int path_right, int path_left, int path_forward, int
     // Process top to know which direction to turn
 
     // path_push(direction);
-    printVisited();
-    printStack();
+
     printPathStack();  
-    
     int mdirection = convertToMouseOrientation(direction);
-    Serial.print("My orientation: ");
-    Serial.print(direction);
-    printDirection(orientation);
     Serial.print("Going to: ");
-    printDirection(mdirection);
+    printMouseDirection(mdirection);
     updateMouseOrientation(mdirection);
 
-    return direction;
+    return mdirection;
 
 }
 
@@ -314,17 +199,17 @@ int MazeTraversal::getMouseOrientation(){
 
 // here d is the direction in the mouse frame
 void MazeTraversal::updateMouseOrientation(int d){
-    if (orientation == 1){
+    if (orientation == North){
         orientation = d;
-    }else if (orientation == 2){
-        if (d == 1){
-            orientation = 2;
-        }else if (d == 2){
-            orientation = 4;
-        }else if (d == 3){
-            orientation = 1;
-        }else if (d == 4){
-            orientation = 3;
+    }else if (orientation == East){
+        if (d == North){
+            orientation = East;
+        }else if (d == East){
+            orientation = South;
+        }else if (d == West){
+            orientation = North;
+        }else if (d == South){
+            orientation = West;
         }
     } else if (orientation == 3){
         if (d == 1){
@@ -402,19 +287,19 @@ MazeTraversal::Path MazeTraversal::convertToMazeOrientation(int path_right, int 
 
     Path possible_paths = {path_right, path_left, path_forward, path_back};
 
-    if (orientation == 1){
+    if (orientation == North){
         return possible_paths;
-    } else if (orientation == 2){
+    } else if (orientation == East){
         possible_paths.back = path_right;
         possible_paths.forward = path_left;
         possible_paths.right = path_forward;
         possible_paths.left = path_back;
-    } else if (orientation == 3){
+    } else if (orientation == West){
         possible_paths.forward = path_right;
         possible_paths.back = path_left;
         possible_paths.left = path_forward;
         possible_paths.right = path_back;
-    } else if (orientation == 4){
+    } else if (orientation == South){
         possible_paths.left = path_right;
         possible_paths.right = path_left;
         possible_paths.back = path_forward;
@@ -474,12 +359,12 @@ MazeTraversal::Cell MazeTraversal::pop()
     return stack[--top];
 }
 
-void MazeTraversal::path_push(int d)
+void MazeTraversal::path_push(MazeTraversal::pathCell cell)
 {
-    path_stack[path_top++] = d;
+    path_stack[path_top++] = cell;
 }
 
-int MazeTraversal::path_pop()
+MazeTraversal::pathCell MazeTraversal::path_pop()
 {
     return path_stack[--path_top];
 }
@@ -643,26 +528,50 @@ void MazeTraversal::printCell(Cell cell){
 }
 
 void MazeTraversal::printDirection(int d){
-    if (d == 1){
+    if (d == North){
         Serial.println("North");
-    }else if (d == 2){
+    }else if (d == East){
         Serial.println("East");
-    }else if (d == 3){
+    }else if (d == West){
         Serial.println("West");
-    }else if (d == 4){
+    }else if (d == South){
         Serial.println("South");
+    }
+}
+void MazeTraversal::printMouseDirection(int d){
+    if (d == North){
+        Serial.println("Forward");
+    }else if (d == East){
+        Serial.println("Right");
+    }else if (d == West){
+        Serial.println("Left");
+    }else if (d == South){
+        Serial.println("Back");
     }
 }
 
 
 
+void MazeTraversal::printnlDirection(int d){
+    if (d == 1){
+        Serial.print("North");
+    }else if (d == 2){
+        Serial.print("East");
+    }else if (d == 3){
+        Serial.print("West");
+    }else if (d == 4){
+        Serial.print("South");
+    }
+}
+
+
 void MazeTraversal::printVisited(){
-    int r = numRows/2 + 8;
-    int c = numCols/2 + 10;
-    for (int i = numRows/2; i < r; i++){
+    int r = numRows;
+    int c = numCols;
+    for (int i = 0; i < r; i++){
         Serial.print("        ");
-        for (int j = numCols/2; j < c; j++){
-            if (visited[i][j])
+        for (int j = 0; j < c; j++){
+            if (visited[i][j] != 5)
                 Serial.print(visited[i][j]);
             else
                 Serial.print(" ");
@@ -721,8 +630,11 @@ void MazeTraversal::printStack(){
 void MazeTraversal::printPathStack(){
     Serial.println("Path Stack: ");
     for (int i = 0; i < path_top; i++){
-        Serial.print("    ");
-        printDirection(path_stack[i]);
+        Serial.print("    {");
+        printnlDirection(path_stack[i].direction);
+        Serial.print(", ");
+        Serial.print(path_stack[i].visited);
+        Serial.println("}");
     }
     Serial.println();
     return;

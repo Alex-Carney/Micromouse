@@ -30,6 +30,19 @@ public:
         int forward;
         int back;
     };
+
+    struct pathCell{
+        int direction;
+        int visited;
+    };
+
+    typedef enum {
+        North = 1,
+        East = 2,
+        West = 3,
+        South = 4
+    } Direction;
+
     // Constructor
     MazeTraversal(int numRows, int numCols);
     // Methods
@@ -38,10 +51,11 @@ public:
     // For maze given as an array
     bool logicTraverse(int startRow, int startCol, int endRow, int endCol);
     void printDirection(int d);
+    
 
     int state = 0; // 0 = traverse. 1 = backtrack.
     Cell position;
-    int orientation = 4; // 1 = North, 2 = East, 3 = West, 4 = South
+    int orientation = North; // 1 = North, 2 = East, 3 = West, 4 = South
 
 private:
     /* Here we assume the maze is given as a 2D matrix for demonstration purposes.
@@ -57,15 +71,15 @@ private:
 
     // stack for DFS
     Cell *stack;
-    int *path_stack;
+    pathCell *path_stack;
     // top of stack index
     int top;
     int path_top;
     // stack methods
     void push(Cell cell);
     Cell pop();
-    void path_push(int d);
-    int path_pop();
+    void path_push(pathCell d);
+    pathCell path_pop();
 
     
     bool isDestination(int row, int col);
@@ -94,6 +108,8 @@ private:
     void printNumVisited();
     void printStack();
     void printPathStack();
+    void printnlDirection(int d);
+    void printMouseDirection(int d);
     
 
 
