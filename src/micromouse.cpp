@@ -64,17 +64,8 @@ PositionSensor sensor_big_circle((int)A9, sensor3_coefficients);
 int NUM_SAMPLES = 15;
 
 // TODO: Majd
-int maze[8][10] = {
-    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
-    {1, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-    {1, 1, 1, 1, 1, 1, 1, 0, 1, 1},
-    {1, 0, 0, 0, 0, 0, 1, 0, 0, 1},
-    {1, 0, 1, 1, 1, 0, 1, 1, 0, 1},
-    {1, 0, 1, 0, 0, 0, 0, 1, 0, 1},
-    {1, 0, 1, 0, 1, 1, 0, 0, 0, 1},
-    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
-};
-MazeTraversal mazeTraversal(8, 10, &maze[0][0]);
+
+MazeTraversal mazeTraversal(8, 10);
 namespace traversal
 {
     // Constants for stopping
