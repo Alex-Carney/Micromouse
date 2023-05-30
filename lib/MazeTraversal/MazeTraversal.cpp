@@ -164,7 +164,7 @@ int MazeTraversal::traverse(int path_right, int path_left, int path_forward, int
             }else{
                 path_stack[path_top-1].visited = 1;
                 direction = currentCell.direction;
-                state = 1;
+                state = 0;
             }           
 
             break;
