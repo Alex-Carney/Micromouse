@@ -111,7 +111,9 @@ int MazeTraversal::traverse(int path_right, int path_left, int path_forward, int
         steps = -1*steps;
     }
 
-    if (steps < 2000){
+    Serial.print("    Steps: ");
+    Serial.println(steps);
+    if (steps < 2700){
         steps = 2;
     }else{
         steps = steps % 1000 > 0 ? steps + 1000 - steps % 1000 : steps - steps % 1000;
@@ -138,16 +140,21 @@ int MazeTraversal::traverse(int path_right, int path_left, int path_forward, int
                 
                 
                 // update path stack
+
+                
+
+
+                // Check cell to the left
+                if (path_west) {
+                    path_push({West, 0});
+                    backtrack = false;
+                    direction = West;
+                }
+
                 if (path_north) {
                     path_push({North, 0});
                     backtrack = false;
                     direction = North;
-                }
-
-                if (path_east) {
-                    path_push({East, 0});
-                    backtrack = false;
-                    direction = East;
                 }
 
                 // Check cell to the bottom
@@ -156,13 +163,12 @@ int MazeTraversal::traverse(int path_right, int path_left, int path_forward, int
                     backtrack = false;
                     direction = South;
                 }
-                // Check cell to the left
-                if (path_west) {
-                    path_push({West, 0});
-                    backtrack = false;
-                    direction = West;
-                }
 
+                if (path_east) {
+                    path_push({East, 0});
+                    backtrack = false;
+                    direction = East;
+                }
                 
 
                 if (!backtrack){
@@ -209,7 +215,7 @@ int MazeTraversal::traverse(int path_right, int path_left, int path_forward, int
     bool path_crossed = false;
     if (orientation == North){
         while (i <= steps){
-            if (visited[cur_row-i][cur_col] != 0 && i > 0)
+            if (visited[cur_row-i][cur_col] != 5 && i > 0)
                 path_crossed = true;
             visited[cur_row-i][cur_col] = North;  
             i++;
@@ -218,7 +224,7 @@ int MazeTraversal::traverse(int path_right, int path_left, int path_forward, int
         // visited[cur_row][cur_col] = North;
     }else if (orientation == East){
         while (i <= steps){
-            if (visited[cur_row][cur_col+i] != 0 && i > 0)
+            if (visited[cur_row][cur_col+i] != 5 && i > 0)
                 path_crossed = true;
             visited[cur_row][cur_col+i] = East;
             i++;
@@ -227,7 +233,7 @@ int MazeTraversal::traverse(int path_right, int path_left, int path_forward, int
         // visited[cur_row][cur_col] = East;
     }else if (orientation == South){
         while (i <= steps){
-            if (visited[cur_row+i][cur_col] != 0 && i > 0)
+            if (visited[cur_row+i][cur_col] != 5 && i > 0)
                 path_crossed = true;
             visited[cur_row+i][cur_col] = South;
             i++;
@@ -236,7 +242,7 @@ int MazeTraversal::traverse(int path_right, int path_left, int path_forward, int
         // visited[cur_row][cur_col] = South;
     }else if (orientation == West){
         while (i <= steps){
-            if (visited[cur_row][cur_col-i] != 0 && i > 0)
+            if (visited[cur_row][cur_col-i] != 5 && i > 0)
                 path_crossed = true;
             visited[cur_row][cur_col-i] = West;
             i++;
@@ -458,14 +464,65 @@ MazeTraversal::pathCell MazeTraversal::path_pop()
 // TODO: Different handling when mouse is ready. End cell is not known. Need sensor data.
 bool MazeTraversal::isDestination()
 {   
-    bool isDestination = true;
-    for (int i = cur_row; i < cur_row + 3; i++){
-        for (int j = cur_col; j < cur_col + 3; j++){
-            if (visited[i][j] == 0){
-                isDestination = false;
+    bool isDestination = false;
+
+
+   
+    for (int i = 3; i < numRows; i++){
+        for (int j = 3; j < numCols; j++){
+            if (visited[i][j] != 5){
+                isDestination = true;
+
+                if (visited[i+1][j] == 5){
+                    isDestination = false;
+                    continue;
+                }
+                
+                if (visited[i+2][j] == 5){
+                    isDestination = false;
+                    continue;
+                }
+
+                if (visited[i][j+1] == 5){
+                    isDestination = false;
+                    continue;
+                }
+
+                if (visited[i][j+2] == 5){
+                    isDestination = false;
+                    continue;
+                }
+
+                if (visited[i+1][j+1] != 5){
+                    isDestination = false;
+                    continue;
+                }
+
+                if (visited[i+1][j+2] == 5){
+                    isDestination = false;
+                    continue;
+                }
+
+                if (visited[i+2][j+1] == 5){
+                    isDestination = false;
+                    continue;
+                }
+
+                if (visited[i+2][j+2] == 5){
+                    isDestination = false;
+                    continue;
+                }
+
+                if (isDestination){
+                    return isDestination;
+                }
+                
             }
         }
     }
+    
+
+    
     return isDestination;
 
 

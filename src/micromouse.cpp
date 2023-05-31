@@ -73,7 +73,7 @@ namespace traversal
     const int STOP_DISTANCE_THRESHOLD_WALL_FOLLOW_OFF = 20; // (cm) Distance threshold for stopping at a wall (front only)
     const int STOP_DISTANCE_THRESHOLD_WALL_FOLLOW_ON = 20;  // (cm) Distance threshold for stopping at a wall (front only)
     const int INTERSECTION_WALK_DISTANCE = 11;              // [Default = 15] (cm) Distance to walk once intersection is found
-    const int DESIRED_WALL_DIST = 10;                       // (cm) Distance to keep from wall, when a front wall is present
+    const int DESIRED_WALL_DIST = 12;                       // (cm) Distance to keep from wall, when a front wall is present
 
     // Constants for turning
     const int VALID_PATH_THRESHOLD = 25; // (cm) If the distance to the left,right,forward wall is greater than this, it's a valid path
@@ -108,6 +108,8 @@ namespace pos_control
     CircularBuffer<double> control_buffer_m1(2, 3); // 2 steps back. 3 values per step
     CircularBuffer<double> control_buffer_m2(2, 3); // 2 steps back. 3 values per step
     double position_reference;
+    double heading_diff = 0;
+    double pos_reference_diff = 0;
 
     // int front_wall_mode = 0; // 0: no wall, 1: wall
     enum class StopMode
@@ -209,7 +211,8 @@ enum class MachineState
     DECELERATING,
     LOGIC,
     TURNING,
-    PROCESS_STOPPED
+    PROCESS_STOPPED,
+    SPIN_MOVE
 };
 MachineState MACHINE_STATE = MachineState::INITIALIZING;
 bool isFirstStateIteration = true;
@@ -276,11 +279,12 @@ void loop()
 
         // Initialize Set Directions
         mySensor.updateEuler();
-        NORTH = mySensor.readEulerHeading();
-        SOUTH = NORTH + 180;
-        EAST = NORTH + 90;
-        WEST = NORTH + 270;
-        curr_Heading = NORTH * M_PI / 180;
+        curr_Heading = ll_control::unwrap_Heading(0,mySensor.readEulerHeading() * M_PI / 180);
+        NORTH = curr_Heading;
+        SOUTH = NORTH - M_PI;
+        EAST = NORTH - M_PI / 2;
+        WEST = NORTH - 3 * M_PI / 2;
+        
         break;
 
     case MachineState::DRIVING:
@@ -352,6 +356,7 @@ void loop()
             traversal::pre_distance_right = dist_right_cm;
             if ((wall || (intersection && wall_control::control_based_on_wall == true)))
             {
+
                 
 #if DEBUG_MODE == 1
                 Serial.print("I think there is a wall: ");
@@ -600,6 +605,12 @@ void loop()
         {
             turning::turn_direction = turning::TurnDirection::FORWARD;
         }
+        else if (traversal::direction == 5){
+            isFirstStateIteration = true;
+            Serial.println("SPIN MOVE !!!!!");
+            MACHINE_STATE = MachineState::SPIN_MOVE;
+            
+        }
         else
         {
             turning::turn_direction = turning::TurnDirection::BACKWARD;
@@ -626,7 +637,12 @@ void loop()
         MACHINE_STATE = MachineState::TURNING;
         isFirstStateIteration = true;
 
+        curr_Heading = ll_control::unwrap_Heading(curr_Heading, mySensor.readEulerHeading() * M_PI / 180);
+        pos_control::heading_diff = curr_Heading - NORTH;
+        pos_control::pos_reference_diff = (pos_control::heading_diff * M_PI * 16.5)/(WHEEL_CIRCUMFERENCE);
+
         break;
+
     case MachineState::TURNING:
         // Initialization
         if (isFirstStateIteration)
@@ -648,22 +664,6 @@ void loop()
             turning::control_buffer_m1.clear();
             turning::control_buffer_m2.clear();
 
-// TODO: Should we remove this?
-#if STATE_DELAY == 1
-            md.setM1Speed(0);
-            md.setM2Speed(0);
-            delay(STATE_DELAY_VALUE);
-#endif
-        }
-
-        newTime = micros();
-        if (((newTime - lastSampleTime)) >= turning::SAMPLING_PERIOD)
-        {
-            // Collect data
-            turning::motor1_pos = encoder::getEncoderValue(ENCODER_M1) - turning::enc_start_m1;
-            turning::motor2_pos = encoder::getEncoderValue(ENCODER_M2) - turning::enc_start_m2;
-            lastSampleTime = newTime;
-
             // Calculate reference position
             switch (turning::turn_direction)
             {
@@ -681,10 +681,28 @@ void loop()
                 break;
             case turning::TurnDirection::BACKWARD:
                 // TODO: HOW DO WE DO A 180?
-                turning::position_reference_left = 2 * turning::SINGLE_WHEEL_POS_REFERENCE;
-                turning::position_reference_right = -2 * turning::SINGLE_WHEEL_POS_REFERENCE;
+                turning::position_reference_left = 1.9 * turning::SINGLE_WHEEL_POS_REFERENCE;
+                turning::position_reference_right = -1.9 * turning::SINGLE_WHEEL_POS_REFERENCE;
                 break;
             }
+
+// TODO: Should we remove this?
+#if STATE_DELAY == 1
+            md.setM1Speed(0);
+            md.setM2Speed(0);
+            delay(STATE_DELAY_VALUE);
+#endif
+        }
+
+        newTime = micros();
+        if (((newTime - lastSampleTime)) >= turning::SAMPLING_PERIOD)
+        {
+            // Collect data
+            turning::motor1_pos = encoder::getEncoderValue(ENCODER_M1) - turning::enc_start_m1;
+            turning::motor2_pos = encoder::getEncoderValue(ENCODER_M2) - turning::enc_start_m2;
+            lastSampleTime = newTime;
+
+            
 
             MotorCommand command = ll_control::compensateMousePosition(
                 turning::position_reference_left,
@@ -705,6 +723,11 @@ void loop()
 
             if (command.next_state == true)
             {
+                curr_Heading = ll_control::unwrap_Heading(curr_Heading, mySensor.readEulerHeading() * M_PI / 180);
+                NORTH = curr_Heading;
+                SOUTH = NORTH - M_PI;
+                EAST = NORTH - M_PI / 2;
+                WEST = NORTH - 3 * M_PI / 2;
 #if DEBUG_MODE == 1
                 Serial.print("Zero ESS");
 #endif
@@ -722,7 +745,87 @@ void loop()
         break;
     default:
         break;
+
+
+    case MachineState::SPIN_MOVE:
+
+        // Initialization
+        if (isFirstStateIteration)
+        {
+            
+
+            oldTime = micros();
+            lastSampleTime = oldTime;
+            // This seems pointless but it's not mine to change
+            turning::encoder3Val_start_m1 = encoder::getEncoderValue(ENCODER_M1); // Starting value for the encoder
+            turning::encoder3Val_start_m2 = encoder::getEncoderValue(ENCODER_M2);
+            turning::enc_start_m1 = turning::encoder3Val_start_m1;
+            turning::enc_start_m2 = turning::encoder3Val_start_m2;
+            turning::encoder3Val_start_m1 = 0;
+            turning::encoder3Val_start_m2 = 0;
+
+            isFirstStateIteration = false;
+
+            // Clear buffers
+            turning::control_buffer_m1.clear();
+            turning::control_buffer_m2.clear();
+
+            // Calculate reference position
+            // Set References for doing a 360
+            turning::position_reference_left = 2 * turning::SINGLE_WHEEL_POS_REFERENCE;
+            turning::position_reference_right = -2 * turning::SINGLE_WHEEL_POS_REFERENCE;
+            
+        }
+
+        Serial.println("SPIN MOVE");
+    
+
+        newTime = micros();
+        if (((newTime - lastSampleTime)) >= turning::SAMPLING_PERIOD)
+        {
+            // Collect data
+            turning::motor1_pos = encoder::getEncoderValue(ENCODER_M1) - turning::enc_start_m1;
+            turning::motor2_pos = encoder::getEncoderValue(ENCODER_M2) - turning::enc_start_m2;
+            lastSampleTime = newTime;
+
+            
+
+            MotorCommand command = ll_control::compensateMousePosition(
+                turning::position_reference_left,
+                turning::position_reference_right,
+                turning::motor1_pos,
+                turning::motor2_pos,
+                newTime,
+                oldTime,
+                turning::encoder3Val_start_m1,
+                turning::encoder3Val_start_m2,
+                turning::control_buffer_m1,
+                turning::control_buffer_m2);
+
+            // Apply control to motors
+            md.setM1Speed((int)command.motor1_pwm);
+            md.setM2Speed((int)command.motor2_pwm);
+            oldTime = newTime;
+
+            if (command.next_state == true)
+            {               
+                md.setM1Speed(0);
+                md.setM2Speed(0);
+                exit(0);
+            }
+        }
+        break;
+    
     }
+
+    
+
+
+
+
+
+        
+
 }
 
 bool isIntersectionRaw(float dist_left_cm, float dist_right_cm)
